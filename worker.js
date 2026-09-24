@@ -137,12 +137,16 @@ function table(rows, key) {
       <td>${esc(kst(rep.last))}</td>
     </tr>`;
     // 세션이 여럿이면 나머지도 들여쓰기해 표시
-    const subs = multi ? sessions.filter(s => s.id !== rep.id).map(s => `<tr class="sub">
-      <td>└ <a href="/admin/${esc(s.id)}?key=${encodeURIComponent(key)}">세션 ${esc(s.id).slice(0, 6)}</a></td>
+    const subs = multi ? sessions.filter(s => s.id !== rep.id).map(s => {
+      const t = kst(s.last).slice(5); // "MM-DD HH:MM"
+      const label = s.done ? (s.gates?.length ? '탈락' : '완료') : `${s.step}/${s.of}`;
+      return `<tr class="sub">
+      <td>└ <a href="/admin/${esc(s.id)}?key=${encodeURIComponent(key)}">${esc(label)} · ${esc(t)}</a></td>
       <td>${stateCell(s)}</td>
       <td>${s.total ?? '—'}</td>
       <td>${esc(kst(s.last))}</td>
-    </tr>`).join('') : '';
+    </tr>`;
+    }).join('') : '';
     return head + subs;
   }).join('');
 

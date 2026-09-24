@@ -8,3 +8,6 @@ Thumbs.db
 
 # 로그/임시
 *.log
+
+# Cloudflare Wrangler 캐시
+.wrangler/
