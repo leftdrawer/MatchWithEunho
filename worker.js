@@ -38,6 +38,7 @@ export default {
         warns: body.warns || prev?.warns || [],
         breakdown: body.breakdown || prev?.breakdown || null,
         saju: body.saju || prev?.saju || null,
+        labeled: body.labeled || prev?.labeled || null,
         answers: body.answers || {},
         first: prev?.first || new Date().toISOString(),
         last: new Date().toISOString()
@@ -144,13 +145,21 @@ function detail(r) {
   const gates = (r.gates || []).map(g => `<span class="tag">${esc(g)}</span>`).join('');
   const warns = (r.warns || []).map(w => `<span class="tag w">${esc(w)}</span>`).join('');
   const flags = (gates || warns) ? `<p>${gates}${warns}</p>` : '';
-  const dd = Object.keys(a).map(k => `<dt>${esc(k)}</dt><dd>${esc(Array.isArray(a[k]) ? a[k].join(', ') : a[k])}</dd>`).join('');
+  let answerBlock;
+  if (Array.isArray(r.labeled) && r.labeled.length) {
+    // 질문·답을 자연어로 표시
+    const rows = r.labeled.map(x => `<dt>${esc(x.q)}</dt><dd>${esc(x.ans)}</dd>`).join('');
+    answerBlock = `<h2>응답 (${r.labeled.length}문항)</h2><dl>${rows}</dl>`;
+  } else {
+    // 옛 데이터: 원본 키·값 fallback
+    const dd = Object.keys(a).map(k => `<dt>${esc(k)}</dt><dd>${esc(Array.isArray(a[k]) ? a[k].join(', ') : a[k])}</dd>`).join('');
+    answerBlock = `<h2>응답 원본</h2><dl>${dd}</dl>`;
+  }
   return `<h1>${esc(r.name) || '(무명)'} · ${r.total ?? '—'}점 ${r.grade ? '· ' + esc(r.grade) : ''}</h1>
     <p>${r.done ? '완료' : `${r.step}/${r.of} 진행 (미완료)`}</p>
     <p>${esc((r.first || '').slice(0, 16).replace('T', ' '))} → ${esc((r.last || '').slice(0, 16).replace('T', ' '))}</p>
     ${flags}
     ${scoreBars(r.breakdown)}
     ${sajuBlock(r.saju)}
-    <h2>응답 원본</h2>
-    <dl>${dd}</dl>`;
+    ${answerBlock}`;
 }

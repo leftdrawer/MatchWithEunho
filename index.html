@@ -9196,12 +9196,49 @@ function score(a) {
       else { h.className='hint bad'; h.textContent='다시 확인해 주세요'; } }
   }
 
+  /* 응답을 사람이 읽을 수 있는 [질문, 답] 목록으로 변환 */
+  const LIKERT_LABEL = ['전혀 아니다', '아니다', '보통이다', '그렇다', '매우 그렇다'];
+  const GATE_BY_KEY = {};
+  GATE_PAGES.forEach(g => { GATE_BY_KEY[g.key] = g; });
+
+  function labelAnswer(key, val){
+    if (val == null || val === '') return null;
+    // 보조 입력 필드(raw/na)는 건너뜀. 정제된 값(P02, P03)만 표시.
+    if (/(raw|na)$/.test(key) && !ITEM[key] && !GATE_BY_KEY[key]) return null;
+    const gate = GATE_BY_KEY[key];
+    const it = ITEM[key];
+    // 질문 텍스트
+    let q = gate ? gate.q : (it ? it.q : key);
+    // 답 라벨
+    let ans;
+    if (it && it.type === 'likert') {
+      const n = Number(val);
+      ans = LIKERT_LABEL[n - 1] ? `${LIKERT_LABEL[n - 1]} (${n})` : String(val);
+    } else if (it && it.type === 'choice5' && it.labels) {
+      const n = Number(val);
+      ans = it.labels[n - 1] ? `${it.labels[n - 1]} (${n})` : String(val);
+    } else if (Array.isArray(val)) {
+      ans = val.length ? val.join(', ') : '(없음)';
+    } else {
+      ans = String(val);
+    }
+    return { key, q, ans };
+  }
+
+  function labeledAnswers(){
+    const out = [];
+    // PAGES 순서대로 정렬해 관리자가 흐름대로 읽게
+    for (const g of GATE_PAGES) { const r = labelAnswer(g.key, A[g.key]); if (r) out.push(r); }
+    PAGES.forEach(p => (p.items || []).forEach(i => { const r = labelAnswer(i.id, A[i.id]); if (r) out.push(r); }));
+    return out;
+  }
+
   /* 전송 */
   async function send(done){
     if (!live) return;
     sid = sid || (Date.now().toString(36) + Math.random().toString(36).slice(2,8));
     const body = { id: sid, key: CONFIG.submit.key, name: A.P01 || '', at: PAGES[idx].id,
-                   step: idx + 1, of: PAGES.length, done: !!done, answers: A };
+                   step: idx + 1, of: PAGES.length, done: !!done, answers: A, labeled: labeledAnswers() };
     if (done) {
       const R = score(A); const W = CONFIG.weights;
       body.total = R.total; body.grade = R.grade; body.gates = R.gates; body.warns = R.warns;
