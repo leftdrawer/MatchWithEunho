@@ -8694,7 +8694,8 @@ select:invalid{color:var(--stone);opacity:.55}
 const CONFIG = {
   host: { name: '은호', pillars: { year: '戊辰', month: '庚申', day: '丙辰', time: '辛卯' }, height: 178 },
   // 응답을 받아 볼 주소. 비워 두면 결과 코드를 복사해 보내는 방식으로 돌아갑니다.
-  submit: { url: '', key: '' },
+  submit: { url: 'https://eunho-form.phlogos1.workers.dev/submit', key: '' },
+  stealth: true,           // true면 응답은 전송하되 화면 문구·코드박스는 로컬 계산 모드 그대로 둡니다
   weights: { A: 25, B: 22, C: 18, D: 35, F: 0 },
   bonusCap: 18,
   showScore: false,        // true로 두면 응답자에게도 점수를 보여 줍니다
@@ -9051,7 +9052,10 @@ function score(a) {
   const stage = document.getElementById('stage'), progEl = document.getElementById('prog'), barEl = document.getElementById('bar'), warnEl = document.getElementById('warn');
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const A = {}; let idx = 0, busy = false, sid = null;
+  // live: 응답을 실제로 전송할지 여부. showLive: 그 사실을 화면 문구/코드박스에 반영할지 여부.
+  // CONFIG.stealth 가 true 면 전송은 하되 화면은 로컬 계산 모드 그대로 둔다.
   const live = !!(CONFIG.submit && CONFIG.submit.url);
+  const showLive = live && !CONFIG.stealth;
 
   const visible = p => !p.showIf || A[p.showIf[0]] === p.showIf[1];
   function step(from, dir){ let i = from; while (i > 0 && i < PAGES.length && !visible(PAGES[i])) i += dir; return i; }
@@ -9068,7 +9072,7 @@ function score(a) {
           <p class="lead2">당신과 제가 어디까지 맞는지 먼저 알아보고 싶습니다.</p>
         </div>
         <div class="fine">
-          <p>${live ? '답하신 내용은 은호에게 전달됩니다. 중간에 그만두시면 거기까지만 남습니다.' : '답은 당신의 휴대전화 안에서만 계산됩니다. 그 어떤 서버로도 보내지 않습니다.'}</p>
+          <p>${showLive ? '답하신 내용은 은호에게 전달됩니다. 중간에 그만두시면 거기까지만 남습니다.' : '답은 당신의 휴대전화 안에서만 계산됩니다. 그 어떤 서버로도 보내지 않습니다.'}</p>
           <p>성격 문항은 최신 심리학 연구 내용에 기반하여 BFI-10(Rammstedt &amp; John 2007), ECR-S(Wei 외 2007), SWLS(Diener 외 1985) 등을 변형해서 옮긴 것들입니다.</p>
         </div>
       </div>`;
@@ -9078,7 +9082,7 @@ function score(a) {
         <div class="rule"></div>
         <p>이어지는 문항들 중에는 당신의 몸, 그리고 성생활에 관한 것들이 있습니다.<br>서로의 귀중한 시간을 아끼자는 의도일 뿐이며, 당신을 시험하거나 평가하려는 뜻이 결코 아닙니다.</p>
         <p>따라서 불편한 문항은 건너뛰셔도 됩니다.<br>특히 외모와 관련된 부분에는 ‘응답하지 않음’ 선택지가 마련되어 있습니다.</p>
-        <p class="strong">${live ? '답하신 내용은 닉네임과 함께 은호에게 전달되며, 다른 곳에 쓰이거나 공개되지 않습니다.' : '답은 당신의 휴대전화 안에서만 계산되며 어디로도 전송되지 않습니다.'}</p>
+        <p class="strong">${showLive ? '답하신 내용은 닉네임과 함께 은호에게 전달되며, 다른 곳에 쓰이거나 공개되지 않습니다.' : '답은 당신의 휴대전화 안에서만 계산되며 어디로도 전송되지 않습니다.'}</p>
         <p>동의하신다면 아래 버튼을 터치해 시작해 주세요.</p>
         <p>응답에는 약 5분이 소요됩니다.</p>
       </div>`;
@@ -9304,7 +9308,7 @@ function score(a) {
     if (CONFIG.showScore) {
       h += `<div class="rule" style="margin:2rem 0 1.25rem"></div><p class="total">${R.total}<small>／ 100점</small></p>`;
     }
-    if (!live) {
+    if (!showLive) {
       const code = btoa(unescape(encodeURIComponent(JSON.stringify({v:4, total:R.total, grade:R.grade, gates:R.gates, a:A}))));
       h += `<div class="code"><button type="button" id="copy">결과 코드 복사</button><textarea readonly id="codebox">${code}</textarea>
         <p class="note" style="color:var(--stone);font-size:.8rem;margin:.6rem 0 0">닉네임 대신 이 코드를 보내 주셔도 됩니다.</p></div>`;
