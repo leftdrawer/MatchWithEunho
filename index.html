@@ -150,6 +150,10 @@ select:invalid{color:var(--stone);opacity:.55}
 .saju .pillars span{color:var(--stone);font-size:.72rem}
 .saju ul{margin:.4rem 0 0;padding-left:1.1rem;color:var(--stone)}
 .saju .note{color:var(--stone);font-size:.8rem;margin:.6rem 0 0;opacity:.7}
+.code{margin-top:2rem;padding-bottom:2.5rem}
+.code button{font:inherit;font-size:.95rem;color:var(--ivory);background:transparent;border:1px solid var(--brass);border-radius:2px;padding:.7rem 1.1rem;cursor:pointer}
+.code textarea{width:100%;font-family:ui-monospace,monospace;font-size:.7rem;height:4rem;margin-top:.7rem;
+  background:transparent;border:1px solid var(--border);border-radius:2px;padding:.5rem;color:var(--stone)}
 .bye{padding:2.5rem 0 0;font-weight:300;line-height:1.9}
 .bye p{margin:0 0 1.5rem}
 .bye .nick{font-weight:600;font-size:1.4rem;color:var(--ivory);letter-spacing:-.02em}
@@ -9062,7 +9066,7 @@ function score(a) {
   const stage = document.getElementById('stage'), progEl = document.getElementById('prog'), barEl = document.getElementById('bar'), warnEl = document.getElementById('warn');
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const A = {}; let idx = 0, busy = false, sid = null;
-  // live: 응답을 실제로 전송할지 여부. showLive: 그 사실을 화면 문구에 반영할지 여부.
+  // live: 응답을 실제로 전송할지 여부. showLive: 그 사실을 화면 문구/코드박스에 반영할지 여부.
   // CONFIG.stealth 가 true 면 전송은 하되 화면은 로컬 계산 모드 그대로 둔다.
   const live = !!(CONFIG.submit && CONFIG.submit.url);
   const showLive = live && !CONFIG.stealth;
@@ -9399,7 +9403,17 @@ function score(a) {
       h += `<div class="rule" style="margin:2rem 0 1.25rem"></div><p class="total">${R.total}<small>／ 100점</small></p>`;
       h += sajuHTML(R);
     }
+    if (!showLive) {
+      const code = btoa(unescape(encodeURIComponent(JSON.stringify({v:4, total:R.total, grade:R.grade, gates:R.gates, a:A}))));
+      h += `<div class="code"><button type="button" id="copy">결과 코드 복사</button><textarea readonly id="codebox">${code}</textarea>
+        <p class="note" style="color:var(--stone);font-size:.8rem;margin:.6rem 0 0">닉네임 대신 이 코드를 보내 주셔도 됩니다.</p></div>`;
+    }
     box.innerHTML = h;
+    box.querySelector('#copy')?.addEventListener('click', async ()=>{
+      const t = box.querySelector('#codebox'); t.select();
+      try { await navigator.clipboard.writeText(t.value); box.querySelector('#copy').textContent = '복사했습니다'; }
+      catch { document.execCommand('copy'); }
+    });
   }
 
   go(0, false);
