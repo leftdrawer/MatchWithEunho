@@ -1,0 +1,8 @@
+name = "eunho-form"
+main = "worker.js"
+compatibility_date = "2026-09-24"
+
+# 응답 저장용 KV 네임스페이스. 코드에서 env.DB 로 사용합니다.
+[[kv_namespaces]]
+binding = "DB"
+id = "03f5b75483574c91ba85cb6c214f5f43"

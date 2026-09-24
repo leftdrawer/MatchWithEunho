@@ -7,7 +7,7 @@
    GET  /admin/1a2b3c?key=...   한 사람의 답을 전부 봅니다.
 */
 
-const ORIGIN = '*';   // 배포한 페이지 주소로 좁히면 더 안전합니다. 예: 'https://leftdrawer.github.io'
+const ORIGIN = 'https://leftdrawer.github.io';   // 배포한 페이지 주소로 좁혀 두었습니다.
 
 export default {
   async fetch(req, env) {
