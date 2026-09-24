@@ -12,8 +12,21 @@
 @font-face{font-family:'Pretendard';font-weight:600;font-style:normal;font-display:swap;src:url('./fonts/Pretendard-SemiBold.subset.woff2') format('woff2')}
 @font-face{font-family:'Pretendard';font-weight:700;font-style:normal;font-display:swap;src:url('./fonts/Pretendard-Bold.subset.woff2') format('woff2')}
 :root{
-  --black:#0A0A0A; --ink:#080B12; --ivory:#F3EFE7; --stone:#BEB7AB; --brass:#A58D5C; --cinnabar:#873B32;
-  --line:#241F1A; --line2:#3A332B; --dur:420ms; --ease:cubic-bezier(.22,.8,.28,1);
+  /* 은호당 다크 화면 색 체계 */
+  --black:#0A0A0A;      /* 먹색 배경 */
+  --ink:#080B12;        /* 자시 기도 계열 남흑 */
+  --card:#151411;       /* 기본 카드 */
+  --card2:#211F1B;      /* 보조 카드·면 */
+  --ivory:#F3EFE7;      /* 한지색 주요 글자 */
+  --stone:#BEB7AB;      /* 보조 글자 */
+  --brass:#A58D5C;      /* 놋빛 장식 */
+  --cinnabar:#873B32;   /* 주사홍 실행 버튼 */
+  --indigo:#2C3D5D;     /* 쪽빛 강조 면 */
+  --indigo-ink:#AEBFCB; /* 쪽빛 계열 링크 글자 */
+  --border:#80786F;     /* 입력·보조버튼 테두리 */
+  --line:#241F1A;       /* 옅은 구분선 */
+  --line2:#39352F;      /* 구분선 */
+  --dur:420ms; --ease:cubic-bezier(.22,.8,.28,1);
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;background:var(--black)}
@@ -65,11 +78,11 @@ body{margin:0;background:var(--black);color:var(--ivory);font-size:16px;line-hei
 .q{display:block;margin-bottom:.6rem;font-weight:400;letter-spacing:-.01em}
 input[type=text],input[type=number],select{
   width:100%;font:inherit;font-size:1.05rem;color:var(--ivory);background:transparent;
-  border:1px solid var(--line2);border-radius:2px;padding:.75rem .85rem;appearance:none;-webkit-appearance:none}
+  border:1px solid var(--border);border-radius:2px;padding:.75rem .85rem;appearance:none;-webkit-appearance:none}
 input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 input[type=number]{-moz-appearance:textfield}
 input::placeholder{color:var(--stone);opacity:.45;letter-spacing:.05em}
-input:focus,select:focus,button:focus-visible,label:focus-within{outline:1px solid var(--brass);outline-offset:2px}
+input:focus,select:focus,button:focus-visible,label:focus-within{outline:2px solid var(--ivory);outline-offset:2px}
 select{background-image:linear-gradient(45deg,transparent 50%,var(--brass) 50%),linear-gradient(135deg,var(--brass) 50%,transparent 50%);
   background-position:calc(100% - 18px) 55%,calc(100% - 12px) 55%;background-size:6px 6px;background-repeat:no-repeat;padding-right:2.2rem}
 select option{background:var(--black);color:var(--ivory)}
@@ -110,9 +123,9 @@ select:invalid{color:var(--stone);opacity:.55}
   background:linear-gradient(to top,var(--black) 62%,rgba(10,10,10,0))}
 .bar .in{max-width:34rem;margin:0 auto;display:flex;gap:.6rem;align-items:center}
 .bar button{flex:1;font:inherit;font-size:1.05rem;font-weight:600;color:var(--ivory);background:var(--cinnabar);
-  border:0;border-radius:2px;padding:.95rem;cursor:pointer;letter-spacing:-.01em}
+  border:1px solid var(--brass);border-radius:2px;padding:.95rem;cursor:pointer;letter-spacing:-.01em}
 .bar button:active{opacity:.85}
-.bar button.sub{flex:0 0 4.5rem;background:transparent;color:var(--stone);border:1px solid var(--line2);font-weight:400}
+.bar button.sub{flex:0 0 4.5rem;background:transparent;color:var(--stone);border:1px solid var(--border);font-weight:400}
 .bar .warn{max-width:34rem;margin:0 auto .6rem;text-align:center;color:var(--cinnabar);font-size:.85rem;min-height:0;display:none}
 .bar .warn.on{display:block}
 /* 결과 */
@@ -130,7 +143,8 @@ select:invalid{color:var(--stone);opacity:.55}
 .bars .n{text-align:right}
 .flags{margin:1.25rem 0 0;padding-left:1.1rem;color:var(--stone)}
 .flags li{margin:.25rem 0}
-.saju{margin-top:2rem;padding:1.1rem;border:1px solid var(--line2);font-size:.92rem}
+.saju{margin-top:2rem;padding:1.1rem 1.1rem 1.1rem 1.25rem;border:1px solid var(--line2);
+  border-left:3px solid var(--indigo);background:rgba(44,61,93,.10);font-size:.92rem}
 .saju .pillars{display:grid;grid-template-columns:repeat(4,1fr);text-align:center;margin:.6rem 0 .8rem}
 .saju .pillars b{display:block;font-size:1.45rem;font-weight:400;color:var(--ivory)}
 .saju .pillars span{color:var(--stone);font-size:.72rem}
@@ -142,7 +156,7 @@ select:invalid{color:var(--stone);opacity:.55}
   background:transparent;border:1px solid var(--line2);border-radius:2px;padding:.5rem;color:var(--stone)}
 .bye{padding:2.5rem 0 0;font-weight:300;line-height:1.9}
 .bye p{margin:0 0 1.5rem}
-.bye .nick{font-weight:600;font-size:1.4rem;color:var(--brass);letter-spacing:-.02em}
+.bye .nick{font-weight:600;font-size:1.4rem;color:var(--ivory);letter-spacing:-.02em}
 </style>
 </head>
 <body>
