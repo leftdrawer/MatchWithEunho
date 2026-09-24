@@ -48,6 +48,24 @@ export default {
       return new Response('ok', { headers: cors });
     }
 
+    // PWA manifest — 관리자 홈 화면 앱용. key를 그대로 실어 start_url 에 넣는다.
+    if (url.pathname === '/manifest.webmanifest') {
+      const key = url.searchParams.get('key') || '';
+      const iconBase = 'https://leftdrawer.github.io/MatchWithEunho/icons';
+      const manifest = {
+        name: '테스트 결과', short_name: '테스트 결과',
+        start_url: '/admin?key=' + encodeURIComponent(key),
+        scope: '/admin', display: 'standalone', orientation: 'portrait',
+        background_color: '#0A0A0A', theme_color: '#0A0A0A', lang: 'ko',
+        icons: [
+          { src: iconBase + '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: iconBase + '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: iconBase + '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+      };
+      return new Response(JSON.stringify(manifest), { headers: { 'Content-Type': 'application/manifest+json; charset=utf-8' } });
+    }
+
     if (url.pathname.startsWith('/admin')) {
       if (url.searchParams.get('key') !== env.ADMIN_KEY) return new Response('no', { status: 401 });
       const one = url.pathname.split('/')[2];
@@ -55,12 +73,13 @@ export default {
       const rows = [];
       for (const k of list.keys) rows.push(await env.DB.get(k.name, 'json'));
       rows.sort((a, b) => (b?.last || '').localeCompare(a?.last || ''));
+      const key = url.searchParams.get('key');
       if (one) {
         const r = rows.find(x => x && x.id === one);
         if (!r) return new Response('없음', { status: 404 });
-        return html(detail(r));
+        return html(detail(r), key);
       }
-      return html(table(rows.filter(Boolean), url.searchParams.get('key')));
+      return html(table(rows.filter(Boolean), key), key);
     }
 
     return new Response('은호당', { status: 200 });
@@ -77,8 +96,14 @@ const kst = iso => {
   const p = n => String(n).padStart(2, '0');
   return `${k.getUTCFullYear()}-${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
 };
-const html = b => new Response(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>응답</title><style>
+const html = (b, key) => new Response(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>응답</title>
+<meta name="theme-color" content="#0A0A0A">
+${key ? `<link rel="manifest" href="/manifest.webmanifest?key=${encodeURIComponent(key)}">` : ''}
+<link rel="apple-touch-icon" href="https://leftdrawer.github.io/MatchWithEunho/icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="테스트 결과"><style>
 body{margin:0;background:#0A0A0A;color:#F3EFE7;font:15px/1.6 'Pretendard','Apple SD Gothic Neo',system-ui,sans-serif;padding:1.5rem}
 h1{font-size:1.3rem;font-weight:600;margin:0 0 1.25rem}
 table{width:100%;border-collapse:collapse;font-size:.9rem}
@@ -137,6 +162,18 @@ section{margin:1.6rem 0;break-inside:avoid}
 .appt td{border-bottom:1px solid #39352F;padding:.5rem .3rem}
 .appt .an{text-align:right;font-variant-numeric:tabular-nums}
 .raw{margin:1.6rem 0 0}.raw summary{cursor:pointer;color:#A58D5C;font-size:.9rem}
+/* 모바일: 척도 행을 세로로 풀어 해설이 넉넉한 폭을 쓰게 */
+@media (max-width:600px){
+  body{padding:1rem}
+  .srow{grid-template-columns:1fr auto auto;grid-template-areas:"code val light" "text text text";gap:.3rem .6rem;padding:.7rem 0}
+  .srow .scode{grid-area:code}
+  .srow .sval{grid-area:val}
+  .srow .lights{grid-area:light}
+  .srow .stext{grid-area:text;font-size:.9rem;line-height:1.6;margin-top:.15rem}
+  .band .who{font-size:1.15rem}
+  .reltab{display:block;overflow-x:auto;white-space:nowrap}
+  .srow .sname{display:block;margin-top:.1rem}
+}
 @media print{
   body{background:#fff;color:#0A0A0A;padding:10mm}
   h1,h2{color:#111}.dim{color:#666}
