@@ -9066,6 +9066,7 @@ function score(a) {
   const stage = document.getElementById('stage'), progEl = document.getElementById('prog'), barEl = document.getElementById('bar'), warnEl = document.getElementById('warn');
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const A = {}; let idx = 0, busy = false, sid = null;
+  const TIMING = {}; let pageEnter = Date.now();   // 페이지별 누적 체류시간(ms)
   // live: 응답을 실제로 전송할지 여부. showLive: 그 사실을 화면 문구/코드박스에 반영할지 여부.
   // CONFIG.stealth 가 true 면 전송은 하되 화면은 로컬 계산 모드 그대로 둔다.
   const live = !!(CONFIG.submit && CONFIG.submit.url);
@@ -9252,7 +9253,7 @@ function score(a) {
     if (!live) return;
     sid = sid || (Date.now().toString(36) + Math.random().toString(36).slice(2,8));
     const body = { id: sid, key: CONFIG.submit.key, name: A.P01 || '', at: PAGES[idx].id,
-                   step: idx + 1, of: PAGES.length, done: !!done, answers: A, labeled: labeledAnswers() };
+                   step: idx + 1, of: PAGES.length, done: !!done, answers: A, labeled: labeledAnswers(), timing: TIMING };
     if (done) {
       const R = score(A); const W = CONFIG.weights;
       body.total = R.total; body.grade = R.grade; body.gates = R.gates; body.warns = R.warns;
@@ -9298,6 +9299,9 @@ function score(a) {
     next = step(next, back ? -1 : 1);
     if (next < 0 || next >= PAGES.length) return;
     busy = true;
+    // 현재 페이지 체류시간 누적 (SPD 지표용)
+    if (cur){ const pid = PAGES[idx].id; TIMING[pid] = (TIMING[pid] || 0) + (Date.now() - pageEnter); }
+    pageEnter = Date.now();
     const h0 = cur ? cur.offsetHeight : 0;
     if (cur){
       const g1 = cur.cloneNode(true), g2 = cur.cloneNode(true);
