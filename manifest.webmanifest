@@ -1,0 +1,17 @@
+{
+  "name": "테스트 결과",
+  "short_name": "테스트 결과",
+  "description": "당신에 대해 알려주세요",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "lang": "ko",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
