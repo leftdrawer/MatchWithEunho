@@ -150,10 +150,6 @@ select:invalid{color:var(--stone);opacity:.55}
 .saju .pillars span{color:var(--stone);font-size:.72rem}
 .saju ul{margin:.4rem 0 0;padding-left:1.1rem;color:var(--stone)}
 .saju .note{color:var(--stone);font-size:.8rem;margin:.6rem 0 0;opacity:.7}
-.code{margin-top:2rem;padding-bottom:2.5rem}
-.code button{font:inherit;font-size:.95rem;color:var(--ivory);background:transparent;border:1px solid var(--brass);border-radius:2px;padding:.7rem 1.1rem;cursor:pointer}
-.code textarea{width:100%;font-family:ui-monospace,monospace;font-size:.7rem;height:4rem;margin-top:.7rem;
-  background:transparent;border:1px solid var(--line2);border-radius:2px;padding:.5rem;color:var(--stone)}
 .bye{padding:2.5rem 0 0;font-weight:300;line-height:1.9}
 .bye p{margin:0 0 1.5rem}
 .bye .nick{font-weight:600;font-size:1.4rem;color:var(--ivory);letter-spacing:-.02em}
@@ -8746,7 +8742,7 @@ const PAGES = [
 
   { id: 'g1', kind: 'gate', key: 'G_dog', q: '강아지 알레르기가 있습니까?', fail: '예',
     reason: '강아지 알레르기. 감자가 먼저입니다' },
-  { id: 'g2', kind: 'gate', key: 'G_bottom', q: '성생활에서 바텀 포지션이 가능합니까?', fail: '아니오',
+  { id: 'g2', kind: 'gate', key: 'G_bottom', q: '성생활에서 바텀 포지션이 절대로 불가능합니까?', fail: '예',
     reason: '바텀이 어려운 경우' },
   { id: 'g3', kind: 'gate', key: 'G_circum', q: '포경수술을 하였습니까?' },
   { id: 'g4', kind: 'gate', key: 'G_phimosis', q: '포피가 끝까지 젖혀지지 않습니까?', fail: '예',
@@ -9066,7 +9062,7 @@ function score(a) {
   const stage = document.getElementById('stage'), progEl = document.getElementById('prog'), barEl = document.getElementById('bar'), warnEl = document.getElementById('warn');
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const A = {}; let idx = 0, busy = false, sid = null;
-  // live: 응답을 실제로 전송할지 여부. showLive: 그 사실을 화면 문구/코드박스에 반영할지 여부.
+  // live: 응답을 실제로 전송할지 여부. showLive: 그 사실을 화면 문구에 반영할지 여부.
   // CONFIG.stealth 가 true 면 전송은 하되 화면은 로컬 계산 모드 그대로 둔다.
   const live = !!(CONFIG.submit && CONFIG.submit.url);
   const showLive = live && !CONFIG.stealth;
@@ -9080,7 +9076,7 @@ function score(a) {
         <h1>당신에 대해 알려주세요</h1>
         <div class="host">
           <p>은호는 부천에 사는 박수무당입니다.</p>
-          <p>178cm, 105kg(2026년 9월 2일 기준).</p>
+          <p>178cm, 103kg(2026년 9월 25일 기준).</p>
           <p>담배는 하루 한 갑.<br>술은 거의 마시지 않습니다.</p>
           <p>일요일과 월요일에 쉽니다.<br>감자라는 강아지를 아들로 키웁니다.</p>
           <p class="lead2">당신과 제가 어디까지 맞는지 먼저 알아보고 싶습니다.</p>
@@ -9098,7 +9094,7 @@ function score(a) {
         <p>따라서 불편한 문항은 건너뛰셔도 됩니다.<br>특히 외모와 관련된 부분에는 ‘응답하지 않음’ 선택지가 마련되어 있습니다.</p>
         <p class="strong">${showLive ? '답하신 내용은 닉네임과 함께 은호에게 전달되며, 다른 곳에 쓰이거나 공개되지 않습니다.' : '답은 당신의 휴대전화 안에서만 계산되며 어디로도 전송되지 않습니다.'}</p>
         <p>동의하신다면 아래 버튼을 터치해 시작해 주세요.</p>
-        <p>응답에는 약 5분이 소요됩니다.</p>
+        <p>응답에는 약 8분이 소요됩니다.</p>
       </div>`;
     if (p.kind === 'gate') return `
       <div class="gate">
@@ -9403,17 +9399,7 @@ function score(a) {
       h += `<div class="rule" style="margin:2rem 0 1.25rem"></div><p class="total">${R.total}<small>／ 100점</small></p>`;
       h += sajuHTML(R);
     }
-    if (!showLive) {
-      const code = btoa(unescape(encodeURIComponent(JSON.stringify({v:4, total:R.total, grade:R.grade, gates:R.gates, a:A}))));
-      h += `<div class="code"><button type="button" id="copy">결과 코드 복사</button><textarea readonly id="codebox">${code}</textarea>
-        <p class="note" style="color:var(--stone);font-size:.8rem;margin:.6rem 0 0">닉네임 대신 이 코드를 보내 주셔도 됩니다.</p></div>`;
-    }
     box.innerHTML = h;
-    box.querySelector('#copy')?.addEventListener('click', async ()=>{
-      const t = box.querySelector('#codebox'); t.select();
-      try { await navigator.clipboard.writeText(t.value); box.querySelector('#copy').textContent = '복사했습니다'; }
-      catch { document.execCommand('copy'); }
-    });
   }
 
   go(0, false);
