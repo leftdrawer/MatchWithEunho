@@ -8696,7 +8696,7 @@ const CONFIG = {
   // 응답을 받아 볼 주소. 비워 두면 결과 코드를 복사해 보내는 방식으로 돌아갑니다.
   submit: { url: 'https://eunho-form.phlogos1.workers.dev/submit', key: '' },
   stealth: true,           // true면 응답은 전송하되 화면 문구·코드박스는 로컬 계산 모드 그대로 둡니다
-  weights: { A: 25, B: 22, C: 18, D: 35, F: 0 },
+  weights: { A: 22, B: 20, C: 16, D: 32, F: 10 },
   bonusCap: 18,
   showScore: false,        // true로 두면 응답자에게도 점수를 보여 줍니다
   cuts: [ [80, '만나보죠'], [65, '대화부터'], [50, '인연은 신령님께'], [0, '다음 생에'] ],
@@ -9202,7 +9202,27 @@ function score(a) {
     sid = sid || (Date.now().toString(36) + Math.random().toString(36).slice(2,8));
     const body = { id: sid, key: CONFIG.submit.key, name: A.P01 || '', at: PAGES[idx].id,
                    step: idx + 1, of: PAGES.length, done: !!done, answers: A };
-    if (done) { const R = score(A); body.total = R.total; body.grade = R.grade; body.gates = R.gates; }
+    if (done) {
+      const R = score(A); const W = CONFIG.weights;
+      body.total = R.total; body.grade = R.grade; body.gates = R.gates; body.warns = R.warns;
+      // 항목별 점수: [획득, 만점] 형태로 관리자가 바로 이해할 수 있게
+      body.breakdown = {
+        A: [Math.round(R.A * 10) / 10, W.A],
+        B: [Math.round(R.B * 10) / 10, W.B],
+        C: [Math.round(R.C * 10) / 10, W.C],
+        D: [Math.round(R.D * 10) / 10, W.D],
+        F: [Math.round(R.F * 10) / 10, W.F],
+        E: [R.E, CONFIG.bonusCap]
+      };
+      const F = R.detail && R.detail.F;
+      if (F && F.chart) {
+        body.saju = {
+          pillars: { year: F.chart.year, month: F.chart.month, day: F.chart.day, time: F.chart.time || null },
+          hasTime: !!F.chart.hasTime,
+          relations: F.rel.list, raw: F.rel.raw, norm: Math.round(F.rel.norm * 100) / 100, wx: F.rel.wx
+        };
+      }
+    }
     try { await fetch(CONFIG.submit.url, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(body), keepalive: true }); } catch(e){}
   }
@@ -9297,6 +9317,29 @@ function score(a) {
   });
 
   /* 결과 */
+  // 사주 판세를 자연어로 렌더링. R.detail.F = {chart, rel} 가 있을 때만.
+  function sajuHTML(R){
+    const F = R.detail && R.detail.F;
+    if (!F || !F.chart) return '';
+    const c = F.chart, rel = F.rel;
+    const pillar = (label, gz) => gz ? `<div><b>${esc(gz)}</b><span>${esc(label)}</span></div>` : '';
+    const pillars = [pillar('연주', c.year), pillar('월주', c.month), pillar('일주', c.day),
+                     c.hasTime ? pillar('시주', c.time) : `<div><b>—</b><span>시주(모름)</span></div>`].join('');
+    const rels = (rel.list && rel.list.length)
+      ? '<ul>' + rel.list.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>'
+      : '<p class="note">은호와 뚜렷한 합·충 관계는 나타나지 않았습니다.</p>';
+    const order = ['木','火','土','金','水'];
+    const wxLine = order.map(k => `${k} ${rel.wx[k]||0}`).join(' · ');
+    const note = c.note && c.note.length ? `<p class="note">진태양시 보정: ${esc(c.note.join(', '))}</p>` : '';
+    return `<div class="saju">
+      <div class="sup" style="margin-bottom:.6rem">사주 궁합</div>
+      <div class="pillars">${pillars}</div>
+      ${rels}
+      <p class="note">오행 분포: ${esc(wxLine)}</p>
+      ${note}
+    </div>`;
+  }
+
   function paint(box){
     const R = score(A);
     let h = `<div class="bye">
@@ -9307,6 +9350,7 @@ function score(a) {
     </div>`;
     if (CONFIG.showScore) {
       h += `<div class="rule" style="margin:2rem 0 1.25rem"></div><p class="total">${R.total}<small>／ 100점</small></p>`;
+      h += sajuHTML(R);
     }
     if (!showLive) {
       const code = btoa(unescape(encodeURIComponent(JSON.stringify({v:4, total:R.total, grade:R.grade, gates:R.gates, a:A}))));
