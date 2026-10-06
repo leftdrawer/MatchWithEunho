@@ -2,9 +2,12 @@
    Cloudflare Workers에 그대로 붙여 넣으면 됩니다.
    필요한 것: KV 네임스페이스 하나(변수명 DB), 비밀값 하나(ADMIN_KEY).
 
-   POST /submit   설문 페이지가 페이지를 넘길 때마다 호출합니다.
-   GET  /admin?key=...   응답 목록을 봅니다.
-   GET  /admin/1a2b3c?key=...   한 사람의 답을 전부 봅니다.
+   POST /submit   설문 페이지가 페이지를 넘길 때마다 호출합니다. (IP당 1분 60회 제한)
+   GET  /admin    응답 목록을 봅니다. (인증 필요)
+   GET  /admin/1a2b3c   한 사람의 답을 전부 봅니다. (인증 필요)
+
+   관리자 인증: Authorization: Bearer <ADMIN_KEY> 헤더를 권장합니다.
+   (기존 ?key= 쿼리 방식도 계속 동작합니다. URL에 키가 남지 않게 하려면 헤더를 쓰세요.)
 */
 
 const ORIGIN = 'https://leftdrawer.github.io';   // 배포한 페이지 주소로 좁혀 두었습니다.
@@ -20,6 +23,10 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
     if (url.pathname === '/submit' && req.method === 'POST') {
+      // 레이트 리밋: 한 IP에서 1분에 60회를 넘기면 429
+      if (!(await checkRateLimit(req, env))) {
+        return new Response('too many requests', { status: 429, headers: { ...cors, 'Retry-After': '60' } });
+      }
       let body;
       try { body = await req.json(); } catch { return new Response('bad json', { status: 400, headers: cors }); }
       const id = String(body.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 32);
@@ -67,7 +74,8 @@ export default {
     }
 
     if (url.pathname.startsWith('/admin')) {
-      if (url.searchParams.get('key') !== env.ADMIN_KEY) return new Response('no', { status: 401 });
+      // 관리자 인증: Authorization: Bearer 헤더 우선, ?key= 쿼리는 하위 호환용으로 유지
+      if (getAdminKey(req) !== env.ADMIN_KEY) return new Response('no', { status: 401 });
       const one = url.pathname.split('/')[2];
       const list = await env.DB.list({ prefix: 'r:' });
       const rows = [];
@@ -87,6 +95,25 @@ export default {
 };
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// 관리자 인증: Authorization: Bearer 헤더를 먼저 보고, 없으면 ?key= 쿼리로 폴백한다.
+// URL에 키를 넣으면 브라우저 히스토리·프록시 로그에 남으므로, 스크립트 접근에는 헤더를 권장한다.
+const getAdminKey = req => {
+  const h = req.headers.get('Authorization') || '';
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  if (m) return m[1].trim();
+  return new URL(req.url).searchParams.get('key') || '';
+};
+// /submit 레이트 리밋: IP당 1분에 60회. KV에 2분 TTL 카운터를 둔다.
+const checkRateLimit = async (req, env) => {
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const k = 'rl:' + ip;
+  const now = Date.now();
+  let rec = await env.DB.get(k, 'json');
+  if (!rec || now - (rec.start || 0) > 60000) rec = { start: now, count: 0 };
+  rec.count += 1;
+  await env.DB.put(k, JSON.stringify(rec), { expirationTtl: 120 });
+  return rec.count <= 60;
+};
 // UTC ISO 문자열을 한국시간(KST, UTC+9) "YYYY-MM-DD HH:MM" 으로 변환
 const kst = iso => {
   if (!iso) return '';
