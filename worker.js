@@ -5,6 +5,7 @@
    POST /submit   설문 페이지가 페이지를 넘길 때마다 호출합니다. (IP당 1분 60회 제한)
    GET  /admin    응답 목록을 봅니다. (인증 필요)
    GET  /admin/1a2b3c   한 사람의 답을 전부 봅니다. (인증 필요)
+   POST /admin/note   사람별 실명·메모를 저장합니다. (인증 필요)
 
    관리자 인증: Authorization: Bearer <ADMIN_KEY> 헤더를 권장합니다.
    (기존 ?key= 쿼리 방식도 계속 동작합니다. URL에 키가 남지 않게 하려면 헤더를 쓰세요.)
@@ -63,7 +64,7 @@ export default {
         name: '테스트 결과', short_name: '테스트 결과',
         start_url: '/admin?key=' + encodeURIComponent(key),
         scope: '/admin', display: 'standalone', orientation: 'portrait',
-        background_color: '#0A0A0A', theme_color: '#0A0A0A', lang: 'ko',
+        background_color: '#1C1715', theme_color: '#1C1715', lang: 'ko',
         icons: [
           { src: iconBase + '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: iconBase + '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -76,25 +77,49 @@ export default {
     if (url.pathname.startsWith('/admin')) {
       // 관리자 인증: Authorization: Bearer 헤더 우선, ?key= 쿼리는 하위 호환용으로 유지
       if (getAdminKey(req) !== env.ADMIN_KEY) return new Response('no', { status: 401 });
+      const key = url.searchParams.get('key');
+
+      // 메모 저장 — 닉네임(사람) 단위로 실명 등 신원 메모를 남긴다.
+      // POST /admin/note  body: { person: '<그룹키>', note: '<메모>' }
+      if (url.pathname === '/admin/note' && req.method === 'POST') {
+        let body;
+        try { body = await req.json(); } catch { return new Response('bad json', { status: 400 }); }
+        const person = String(body.person || '').slice(0, 80);
+        if (!person) return new Response('no person', { status: 400 });
+        const note = String(body.note || '').slice(0, 2000);
+        if (note) await env.DB.put('m:' + person, note);
+        else await env.DB.delete('m:' + person);   // 빈 값이면 메모 삭제
+        return new Response('ok');
+      }
+
       const one = url.pathname.split('/')[2];
       const list = await env.DB.list({ prefix: 'r:' });
       const rows = [];
       for (const k of list.keys) rows.push(await env.DB.get(k.name, 'json'));
       rows.sort((a, b) => (b?.last || '').localeCompare(a?.last || ''));
-      const key = url.searchParams.get('key');
       if (one) {
         const r = rows.find(x => x && x.id === one);
         if (!r) return new Response('없음', { status: 404 });
-        return html(detail(r), key);
+        const note = await env.DB.get('m:' + personKey(r)) || '';
+        return html(detail(r, note, key), key);
       }
-      return html(table(rows.filter(Boolean), key), key);
+      // 목록: 각 사람의 메모를 한번에 읽어 넘긴다.
+      const valid = rows.filter(Boolean);
+      const notes = {};
+      const seen = new Set();
+      for (const r of valid) {
+        const pk = personKey(r);
+        if (seen.has(pk)) continue;
+        seen.add(pk);
+        notes[pk] = await env.DB.get('m:' + pk) || '';
+      }
+      return html(table(valid, key, notes), key);
     }
 
     return new Response('은호당', { status: 200 });
   }
 };
 
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // 관리자 인증: Authorization: Bearer 헤더를 먼저 보고, 없으면 ?key= 쿼리로 폴백한다.
 // URL에 키를 넣으면 브라우저 히스토리·프록시 로그에 남으므로, 스크립트 접근에는 헤더를 권장한다.
 const getAdminKey = req => {
@@ -114,6 +139,8 @@ const checkRateLimit = async (req, env) => {
   await env.DB.put(k, JSON.stringify(rec), { expirationTtl: 120 });
   return rec.count <= 60;
 };
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // UTC ISO 문자열을 한국시간(KST, UTC+9) "YYYY-MM-DD HH:MM" 으로 변환
 const kst = iso => {
   if (!iso) return '';
@@ -125,70 +152,77 @@ const kst = iso => {
 };
 const html = (b, key) => new Response(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>응답</title>
-<meta name="theme-color" content="#0A0A0A">
+<meta name="theme-color" content="#1C1715">
 ${key ? `<link rel="manifest" href="/manifest.webmanifest?key=${encodeURIComponent(key)}">` : ''}
 <link rel="apple-touch-icon" href="https://leftdrawer.github.io/MatchWithEunho/icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="테스트 결과"><style>
-body{margin:0;background:#0A0A0A;color:#F3EFE7;font:15px/1.6 'Pretendard','Apple SD Gothic Neo',system-ui,sans-serif;padding:1.5rem}
+body{margin:0;background:#1C1715;color:#F0E6DD;font:15px/1.6 'Pretendard','Apple SD Gothic Neo',system-ui,sans-serif;padding:1.5rem}
 h1{font-size:1.3rem;font-weight:600;margin:0 0 1.25rem}
 table{width:100%;border-collapse:collapse;font-size:.9rem}
-th,td{text-align:left;padding:.6rem .5rem;border-bottom:1px solid #3A332B}
-th{color:#A58D5C;font-weight:600;font-size:.78rem;letter-spacing:.1em}
-a{color:#F3EFE7}
-.done{color:#A58D5C}.gate{color:#873B32}
-.bar{display:inline-block;height:3px;background:#A58D5C;vertical-align:middle}
-dl{margin:0}dt{color:#A58D5C;font-size:.8rem;margin-top:.9rem}dd{margin:.15rem 0 0}
-h2{font-size:1rem;font-weight:600;color:#A58D5C;letter-spacing:.08em;margin:1.8rem 0 .8rem;border-bottom:1px solid #3A332B;padding-bottom:.4rem}
+th,td{text-align:left;padding:.6rem .5rem;border-bottom:1px solid #463531}
+th{color:#D8B9AB;font-weight:600;font-size:.78rem;letter-spacing:.1em}
+a{color:#F0E6DD}
+.done{color:#D8B9AB}.gate{color:#873B32}
+.bar{display:inline-block;height:3px;background:#D8B9AB;vertical-align:middle}
+dl{margin:0}dt{color:#D8B9AB;font-size:.8rem;margin-top:.9rem}dd{margin:.15rem 0 0}
+h2{font-size:1rem;font-weight:600;color:#D8B9AB;letter-spacing:.08em;margin:1.8rem 0 .8rem;border-bottom:1px solid #463531;padding-bottom:.4rem}
 .score{display:grid;grid-template-columns:6rem 1fr 4rem;align-items:center;gap:.7rem;margin:.5rem 0;font-size:.9rem}
-.score .lab{color:#BEB7AB}
-.score .track{height:6px;background:#241F1A;border-radius:3px;overflow:hidden}
-.score .fill{height:100%;background:#A58D5C}
-.score .num{text-align:right;color:#F3EFE7;font-variant-numeric:tabular-nums}
+.score .lab{color:#C1A094}
+.score .track{height:6px;background:#2E221F;border-radius:3px;overflow:hidden}
+.score .fill{height:100%;background:#D8B9AB}
+.score .num{text-align:right;color:#F0E6DD;font-variant-numeric:tabular-nums}
 .pill{display:grid;grid-template-columns:repeat(4,1fr);text-align:center;gap:.5rem;margin:.6rem 0 1rem}
-.pill div{border:1px solid #3A332B;border-radius:2px;padding:.6rem .3rem}
-.pill b{display:block;font-size:1.5rem;font-weight:400;color:#F3EFE7}
-.pill span{color:#BEB7AB;font-size:.72rem}
-.rel{margin:.4rem 0;padding-left:1.1rem;color:#F3EFE7}.rel li{margin:.2rem 0}
-.wx{color:#BEB7AB;font-size:.85rem;margin:.6rem 0 0}
+.pill div{border:1px solid #463531;border-radius:2px;padding:.6rem .3rem}
+.pill b{display:block;font-size:1.5rem;font-weight:400;color:#F0E6DD}
+.pill span{color:#C1A094;font-size:.72rem}
+.rel{margin:.4rem 0;padding-left:1.1rem;color:#F0E6DD}.rel li{margin:.2rem 0}
+.wx{color:#C1A094;font-size:.85rem;margin:.6rem 0 0}
 .tag{display:inline-block;border:1px solid #873B32;color:#873B32;border-radius:2px;padding:.15rem .5rem;font-size:.8rem;margin:.15rem .3rem .15rem 0}
-.tag.w{border-color:#A58D5C;color:#A58D5C}
-.dim{color:#5E5A53;font-size:.85em}
+.tag.w{border-color:#D8B9AB;color:#D8B9AB}
+.dim{color:#8A7368;font-size:.85em}
 /* 보고서 머리띠 */
-.band{border:1px solid #39352F;border-left:3px solid #2C3D5D;background:rgba(44,61,93,.10);padding:1rem 1.1rem;margin:0 0 1.2rem;border-radius:2px}
+.band{border:1px solid #463531;border-left:3px solid #60433D;background:rgba(96,67,61,.18);padding:1rem 1.1rem;margin:0 0 1.2rem;border-radius:2px}
 .band .who{font-size:1.35rem;font-weight:600}
-.band .meta{color:#BEB7AB;font-size:.85rem;margin:.2rem 0 .8rem}
+.band .meta{color:#C1A094;font-size:.85rem;margin:.2rem 0 .8rem}
 .ovbox{display:flex;align-items:baseline;gap:.9rem;flex-wrap:wrap}
 .ovband{border-radius:2px;padding:.3rem .9rem;font-weight:600;font-size:1rem}
-.ovband.ok{background:#3F6B4C;color:#F3EFE7}.ovband.lime{background:#8DA66F;color:#0A0A0A}
-.ovband.warn{background:#C09A5B;color:#0A0A0A}.ovband.bad{background:#873B32;color:#F3EFE7}
-.ovband.hold{background:#39352F;color:#BEB7AB}
-.ovscore{font-size:1.5rem;font-weight:700}.ovscore small{font-size:.8rem;color:#BEB7AB;font-weight:300}
+.ovband.ok{background:#3F6B4C;color:#F0E6DD}.ovband.lime{background:#8DA66F;color:#1C1715}
+.ovband.warn{background:#C09A5B;color:#1C1715}.ovband.bad{background:#873B32;color:#F0E6DD}
+.ovband.hold{background:#463531;color:#C1A094}
+.ovscore{font-size:1.5rem;font-weight:700}.ovscore small{font-size:.8rem;color:#C1A094;font-weight:300}
 .gates{border:1px solid #873B32;border-radius:2px;padding:.6rem .8rem;margin:0 0 1.2rem;font-size:.9rem}
 .gates b{color:#C0392B;margin-right:.4rem}
 .verdict{font-size:.85rem;padding:.15rem .6rem;border-radius:2px;margin-left:.5rem;vertical-align:middle}
-.verdict.ok{background:#3F6B4C}.verdict.warn{background:#C09A5B;color:#0A0A0A}.verdict.bad{background:#873B32}
+.verdict.ok{background:#3F6B4C}.verdict.warn{background:#C09A5B;color:#1C1715}.verdict.bad{background:#873B32}
 .reltab{width:100%;border-collapse:collapse;margin:.3rem 0 0}
-.reltab td{border:1px solid #39352F;text-align:center;padding:.4rem .2rem;vertical-align:top}
-.reltab b{display:block;color:#A58D5C;font-size:.8rem}
+.reltab td{border:1px solid #463531;text-align:center;padding:.4rem .2rem;vertical-align:top}
+.reltab b{display:block;color:#D8B9AB;font-size:.8rem}
 .reltab span{display:block;font-size:.9rem;margin:.15rem 0}
 .reltab em{display:block;font-size:.68rem;font-style:normal}
 .reltab em.warn{color:#C09A5B}.reltab em.bad{color:#C0392B}
 section{margin:1.6rem 0;break-inside:avoid}
 .chart{margin:.4rem 0 1rem}
-.chart-t{color:#A58D5C;font-size:.85rem;letter-spacing:.06em;margin:0 0 .3rem}
-.srow{display:grid;grid-template-columns:8.5rem 2.2rem 5.5rem 1fr;align-items:center;gap:.6rem;padding:.4rem 0;border-top:1px solid #241F1A;font-size:.88rem}
-.srow .scode{font-weight:600}.srow .sname{color:#BEB7AB;font-weight:400;font-size:.82rem}
-.srow .sval{text-align:right;font-variant-numeric:tabular-nums;color:#F3EFE7}
-.srow .stext{color:#BEB7AB;font-size:.85rem;line-height:1.5}
+.chart-t{color:#D8B9AB;font-size:.85rem;letter-spacing:.06em;margin:0 0 .3rem}
+.srow{display:grid;grid-template-columns:8.5rem 2.2rem 5.5rem 1fr;align-items:center;gap:.6rem;padding:.4rem 0;border-top:1px solid #2E221F;font-size:.88rem}
+.srow .scode{font-weight:600}.srow .sname{color:#C1A094;font-weight:400;font-size:.82rem}
+.srow .sval{text-align:right;font-variant-numeric:tabular-nums;color:#F0E6DD}
+.srow .stext{color:#C1A094;font-size:.85rem;line-height:1.5}
 .lights{display:inline-flex;align-items:center;gap:2px}
 .lights i{width:.7rem;height:.7rem;border-radius:1px;display:inline-block}
-.lights .lg{color:#5E5A53;font-size:.7rem;margin-left:.3rem}
+.lights .lg{color:#8A7368;font-size:.7rem;margin-left:.3rem}
 .appt{width:100%;border-collapse:collapse;font-size:.9rem}
-.appt td{border-bottom:1px solid #39352F;padding:.5rem .3rem}
+.appt td{border-bottom:1px solid #463531;padding:.5rem .3rem}
 .appt .an{text-align:right;font-variant-numeric:tabular-nums}
-.raw{margin:1.6rem 0 0}.raw summary{cursor:pointer;color:#A58D5C;font-size:.9rem}
+.raw{margin:1.6rem 0 0}.raw summary{cursor:pointer;color:#D8B9AB;font-size:.9rem}
+.notebox{border:1px solid #463531;border-left:3px solid #D8B9AB;border-radius:2px;padding:.8rem 1rem;margin:0 0 1.2rem}
+.notebox label{display:block;color:#D8B9AB;font-size:.78rem;letter-spacing:.08em;margin:0 0 .4rem}
+.notebox .note{width:100%;background:transparent;border:1px solid #463531;border-radius:2px;color:#F0E6DD;font:inherit;font-size:.9rem;padding:.5rem .6rem}
+.notebox .note:focus{outline:none;border-color:#D8B9AB}
+.notebox .note::placeholder{color:#8A7368}
+.notebox .notestat{color:#D8B9AB;font-size:.78rem;margin-left:.5rem}
+.notebox .notestat.err{color:#C0392B}
 /* 모바일: 척도 행을 세로로 풀어 해설이 넉넉한 폭을 쓰게 */
 @media (max-width:600px){
   body{padding:1rem}
@@ -202,7 +236,7 @@ section{margin:1.6rem 0;break-inside:avoid}
   .srow .sname{display:block;margin-top:.1rem}
 }
 @media print{
-  body{background:#fff;color:#0A0A0A;padding:10mm}
+  body{background:#fff;color:#1A1A1A;padding:10mm}
   h1,h2{color:#111}.dim{color:#666}
   .band{background:#f2f2f2;border-color:#ccc}
   section,.reltab,.appt,.chart{break-inside:avoid}
@@ -218,11 +252,17 @@ function stateCell(r) {
   return `${state}<div class="bar" style="width:${pct}%"></div>`;
 }
 
-function table(rows, key) {
+// 사람(그룹) 식별 키. 닉네임이 있으면 이름으로, 없으면 세션 id로 각각 취급.
+// 메모는 이 키 단위로 저장·조회한다.
+function personKey(r) {
+  return (r.name && r.name.trim()) ? '이름:' + r.name.trim() : '무명:' + r.id;
+}
+
+function table(rows, key, notes = {}) {
   // 같은 닉네임끼리 묶는다. 이름이 없으면 세션 id로 각각 취급.
   const groups = new Map();
   for (const r of rows) {
-    const gkey = (r.name && r.name.trim()) ? '이름:' + r.name.trim() : '무명:' + r.id;
+    const gkey = personKey(r);
     if (!groups.has(gkey)) groups.set(gkey, []);
     groups.get(gkey).push(r);
   }
@@ -238,6 +278,8 @@ function table(rows, key) {
     const rep = (done.length ? done : sessions).slice().sort((a, b) => (b.total ?? -1) - (a.total ?? -1))[0];
     const name = esc(rep.name) || '(무명)';
     const multi = sessions.length > 1;
+    const pk = personKey(rep);
+    const note = notes[pk] || '';
     // 그룹 헤더 행
     const head = `<tr class="grp">
       <td><a href="/admin/${esc(rep.id)}?key=${encodeURIComponent(key)}">${name}</a>${multi ? ` <span class="cnt">${sessions.length}회</span>` : ''}</td>
@@ -245,6 +287,12 @@ function table(rows, key) {
       <td>${rep.total ?? '—'}</td>
       <td>${esc(kst(rep.last))}</td>
     </tr>`;
+    // 메모 행 — 실명 등 신원 메모. 닉네임(사람) 단위로 저장된다.
+    const noteRow = `<tr class="noterow"><td colspan="4">
+      <input class="note" type="text" value="${esc(note)}" placeholder="실명·메모 (예: 김이름 010-…)"
+        data-person="${esc(pk)}" data-saved="${esc(note)}">
+      <span class="notestat"></span>
+    </td></tr>`;
     // 세션이 여럿이면 나머지도 들여쓰기해 표시
     const subs = multi ? sessions.filter(s => s.id !== rep.id).map(s => {
       const t = kst(s.last).slice(5); // "MM-DD HH:MM"
@@ -256,17 +304,51 @@ function table(rows, key) {
       <td>${esc(kst(s.last))}</td>
     </tr>`;
     }).join('') : '';
-    return head + subs;
+    return head + noteRow + subs;
   }).join('');
 
   return `<style>
-    .grp td{border-top:2px solid #3A332B}
-    .sub td{color:#8a8378;font-size:.82rem;padding-top:.3rem;padding-bottom:.3rem}
-    .sub a{color:#8a8378}
-    .cnt{color:#A58D5C;font-size:.75rem;border:1px solid #A58D5C;border-radius:2px;padding:.05rem .35rem;margin-left:.4rem}
+    .grp td{border-top:2px solid #463531}
+    .sub td{color:#A2857A;font-size:.82rem;padding-top:.3rem;padding-bottom:.3rem}
+    .sub a{color:#A2857A}
+    .cnt{color:#D8B9AB;font-size:.75rem;border:1px solid #D8B9AB;border-radius:2px;padding:.05rem .35rem;margin-left:.4rem}
+    .noterow td{border-bottom:none;padding-top:.15rem;padding-bottom:.5rem}
+    .note{width:100%;max-width:26rem;background:transparent;border:1px solid #463531;border-radius:2px;
+      color:#F0E6DD;font:inherit;font-size:.82rem;padding:.4rem .55rem}
+    .note:focus{outline:none;border-color:#D8B9AB}
+    .note::placeholder{color:#8A7368}
+    .notestat{color:#D8B9AB;font-size:.75rem;margin-left:.5rem;vertical-align:middle}
+    .notestat.err{color:#C0392B}
   </style>
   <h1>응답 ${rows.length}건 · ${arr.length}명</h1><table>
-    <tr><th>닉네임</th><th>진행</th><th>점수</th><th>마지막(KST)</th></tr>${blocks}</table>`;
+    <tr><th>닉네임</th><th>진행</th><th>점수</th><th>마지막(KST)</th></tr>${blocks}</table>
+  <script>
+  (function(){
+    var key = ${JSON.stringify(key)};
+    function save(inp){
+      var person = inp.getAttribute('data-person');
+      var val = inp.value.trim();
+      if (val === (inp.getAttribute('data-saved')||'')) return;   // 변경 없으면 무시
+      var stat = inp.parentNode.querySelector('.notestat');
+      stat.className = 'notestat'; stat.textContent = '저장 중…';
+      fetch('/admin/note?key=' + encodeURIComponent(key), {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ person: person, note: val })
+      }).then(function(r){
+        if (!r.ok) throw new Error('fail');
+        inp.setAttribute('data-saved', val);
+        stat.textContent = '저장됨';
+        setTimeout(function(){ if(stat.textContent==='저장됨') stat.textContent=''; }, 1800);
+      }).catch(function(){
+        stat.className = 'notestat err'; stat.textContent = '저장 실패';
+      });
+    }
+    document.querySelectorAll('.note').forEach(function(inp){
+      inp.addEventListener('blur', function(){ save(inp); });
+      inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
+    });
+  })();
+  </script>`;
 }
 
 const CAT = { A: '성격·애착·삶만족', B: '가치관·생활', C: '관계·소통', D: '외모·신체·성', F: '사주 궁합', E: '가점(재능·언어)' };
@@ -856,15 +938,15 @@ function ageOf(a) {
 }
 
 // 신호등 5칸. 방향 반영된 색으로 해당 칸만 켜진다.
-const LIGHT_HEX = { red: '#C0392B', amber: '#CB7B6E', yellow: '#C09A5B', lime: '#8DA66F', green: '#3F6B4C', flat: '#5E5A53' };
+const LIGHT_HEX = { red: '#C0392B', amber: '#CB7B6E', yellow: '#C09A5B', lime: '#8DA66F', green: '#3F6B4C', flat: '#8A7368' };
 function lightBar(v, dir) {
   const color = lightColor(v, dir);
   const order = ['red', 'amber', 'yellow', 'lime', 'green'];
   if (color === 'flat') {
-    return `<span class="lights">${order.map(() => `<i style="background:#39352F"></i>`).join('')}<b class="lg">방향 없음</b></span>`;
+    return `<span class="lights">${order.map(() => `<i style="background:#463531"></i>`).join('')}<b class="lg">방향 없음</b></span>`;
   }
   const on = order.indexOf(color);
-  const cells = order.map((c, i) => `<i style="background:${i === on ? LIGHT_HEX[c] : '#39352F'}"></i>`).join('');
+  const cells = order.map((c, i) => `<i style="background:${i === on ? LIGHT_HEX[c] : '#463531'}"></i>`).join('');
   return `<span class="lights">${cells}</span>`;
 }
 
@@ -877,28 +959,28 @@ function svgChart(scales, title) {
   const y = v => padT + plotH * (1 - v / 100);
   // 기준선
   const grid = [
-    `<line x1="${padL}" y1="${y(50)}" x2="${W - padR}" y2="${y(50)}" stroke="#5E5A53" stroke-width="1"/>`,
-    `<line x1="${padL}" y1="${y(30)}" x2="${W - padR}" y2="${y(30)}" stroke="#39352F" stroke-dasharray="3 3"/>`,
-    `<line x1="${padL}" y1="${y(70)}" x2="${W - padR}" y2="${y(70)}" stroke="#39352F" stroke-dasharray="3 3"/>`
+    `<line x1="${padL}" y1="${y(50)}" x2="${W - padR}" y2="${y(50)}" stroke="#8A7368" stroke-width="1"/>`,
+    `<line x1="${padL}" y1="${y(30)}" x2="${W - padR}" y2="${y(30)}" stroke="#463531" stroke-dasharray="3 3"/>`,
+    `<line x1="${padL}" y1="${y(70)}" x2="${W - padR}" y2="${y(70)}" stroke="#463531" stroke-dasharray="3 3"/>`
   ].join('');
-  const yl = [0, 30, 50, 70, 100].map(v => `<text x="${padL - 6}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="#BEB7AB">${v}</text>`).join('');
+  const yl = [0, 30, 50, 70, 100].map(v => `<text x="${padL - 6}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="#C1A094">${v}</text>`).join('');
   // 값 꺾은선 (null은 건너뜀)
   const pts = scales.map((s, i) => s.val == null ? null : [x(i), y(s.val), s]);
   const line = pts.filter(Boolean).map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const dots = pts.filter(Boolean).map(p => {
-    const filled = p[2].dir === 'flat' ? `fill="#0A0A0A" stroke="#A58D5C"` : `fill="#A58D5C" stroke="#A58D5C"`;
+    const filled = p[2].dir === 'flat' ? `fill="#1C1715" stroke="#D8B9AB"` : `fill="#D8B9AB" stroke="#D8B9AB"`;
     return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" ${filled} stroke-width="1.5"/>` +
-      `<text x="${p[0].toFixed(1)}" y="${(p[1] - 8).toFixed(1)}" text-anchor="middle" font-size="9" fill="#F3EFE7">${p[2].val}</text>`;
+      `<text x="${p[0].toFixed(1)}" y="${(p[1] - 8).toFixed(1)}" text-anchor="middle" font-size="9" fill="#F0E6DD">${p[2].val}</text>`;
   }).join('');
   // 축 약호 (방향 down이면 ↓)
   const labels = scales.map((s, i) => {
     const mark = s.dir === 'down' ? '↓' : s.dir === 'flat' ? '○' : '';
-    return `<text x="${x(i)}" y="${H - padB + 16}" text-anchor="middle" font-size="10" fill="#BEB7AB">${esc(s.code)}${mark}</text>`;
+    return `<text x="${x(i)}" y="${H - padB + 16}" text-anchor="middle" font-size="10" fill="#C1A094">${esc(s.code)}${mark}</text>`;
   }).join('');
   return `<div class="chart"><div class="chart-t">${esc(title)}</div>
     <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">
       ${grid}${yl}
-      ${line ? `<path d="${line}" fill="none" stroke="#A58D5C" stroke-width="1.5"/>` : ''}
+      ${line ? `<path d="${line}" fill="none" stroke="#D8B9AB" stroke-width="1.5"/>` : ''}
       ${dots}${labels}
     </svg></div>`;
 }
@@ -934,7 +1016,7 @@ function appearanceTable(app) {
   return `<h2>외모·그 아래</h2><table class="appt">${rows}</table>`;
 }
 
-function detail(r) {
+function detail(r, note = '', currentKey = '') {
   const a = r.answers || {};
   const scales = computeScales(a);
   const rel = reliability(a, r.timing);
@@ -965,6 +1047,34 @@ function detail(r) {
     ? `<dl>${answerRows.map(x => `<dt>${esc(x.q)}</dt><dd>${esc(x.ans)}</dd>`).join('')}</dl>`
     : `<dl>${Object.keys(a).map(k => `<dt>${esc(k)}</dt><dd>${esc(Array.isArray(a[k]) ? a[k].join(', ') : a[k])}</dd>`).join('')}</dl>`;
 
+  const pk = personKey(r);
+  const noteBlock = `<div class="notebox">
+      <label>메모 (실명·연락처 등)</label>
+      <input class="note" type="text" value="${esc(note)}" placeholder="실명·메모 (예: 김이름 010-…)"
+        data-person="${esc(pk)}" data-saved="${esc(note)}">
+      <span class="notestat"></span>
+      <script>
+      (function(){
+        var key = ${JSON.stringify(currentKey)};
+        var inp = document.currentScript.parentNode.querySelector('.note');
+        var stat = inp.parentNode.querySelector('.notestat');
+        function save(){
+          var val = inp.value.trim();
+          if (val === (inp.getAttribute('data-saved')||'')) return;
+          stat.className='notestat'; stat.textContent='저장 중…';
+          fetch('/admin/note?key=' + encodeURIComponent(key), {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ person: inp.getAttribute('data-person'), note: val })
+          }).then(function(r){ if(!r.ok) throw 0; inp.setAttribute('data-saved',val);
+            stat.textContent='저장됨'; setTimeout(function(){ if(stat.textContent==='저장됨') stat.textContent=''; },1800);
+          }).catch(function(){ stat.className='notestat err'; stat.textContent='저장 실패'; });
+        }
+        inp.addEventListener('blur', save);
+        inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
+      })();
+      </script>
+    </div>`;
+
   return `<div class="band">
       <div class="who">${who}</div>
       <div class="meta">${status} · ${esc(kst(r.last))} KST</div>
@@ -974,6 +1084,7 @@ function detail(r) {
         ${r.total != null ? `<div class="dim">설문 점수 ${r.total} (별도 산식)</div>` : ''}
       </div>
     </div>
+    ${noteBlock}
     ${gateBlock}
     ${reliabilityRow(rel)}
     <section>${svgChart(scales.temperament, '기질 — 그 사람 자체')}
