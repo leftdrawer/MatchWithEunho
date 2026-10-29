@@ -88,36 +88,30 @@ export default {
         return new Response(null, { status: 303, headers: { Location: '/admin', 'Set-Cookie': `${COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/admin; Max-Age=0` } });
       }
 
-      // 구글 로그인 시작: state 쿠키를 심고 구글 동의 화면으로 보낸다.
+      // 구글 로그인 시작: 서명된 state를 담아 구글 동의 화면으로 보낸다. (쿠키 불필요)
       if (url.pathname === '/admin/google') {
         if (!googleConfigured(env)) return new Response('구글 로그인이 설정되지 않았습니다.', { status: 503 });
-        const state = randomState();
-        const headers = new Headers({ Location: googleAuthUrl(url, env.GOOGLE_CLIENT_ID, state) });
-        // state는 10분짜리 쿠키로 저장(SameSite=Lax 여야 구글에서 돌아올 때 전송됨)
-        headers.append('Set-Cookie', `eh_state=${state}; HttpOnly; Secure; SameSite=Lax; Path=/admin; Max-Age=600`);
-        return new Response(null, { status: 303, headers });
+        const state = await makeState(env.ADMIN_KEY);
+        return new Response(null, { status: 303, headers: { Location: googleAuthUrl(url, env.GOOGLE_CLIENT_ID, state) } });
       }
 
       // 구글 콜백: code→이메일 교환, 허용 계정이면 세션 쿠키 발급.
       if (url.pathname === OAUTH_REDIRECT_PATH) {
         const code = url.searchParams.get('code');
         const retState = url.searchParams.get('state');
-        const rawCookie = req.headers.get('Cookie') || '';
-        const stm = rawCookie.match(/(?:^|;\s*)eh_state=([^;]+)/);
-        const savedState = stm ? decodeURIComponent(stm[1]) : '';
-        // CSRF: 쿼리의 state와 쿠키의 state가 일치해야 한다
-        if (!code || !retState || !savedState || !safeEqual(retState, savedState)) {
-          return loginPage('로그인 세션이 올바르지 않습니다. 다시 시도해 주세요.', env);
+        // 구글이 에러를 돌려준 경우(동의 거부 등) 메시지 표시
+        const gerr = url.searchParams.get('error');
+        if (gerr) return loginPage('구글 로그인이 취소되었습니다 (' + gerr + ').', env);
+        // CSRF: state의 서명·만료만 검증 (쿠키에 의존하지 않음)
+        if (!code || !(await stateValid(retState, env.ADMIN_KEY))) {
+          return loginPage('로그인 세션이 만료되었습니다. 다시 시도해 주세요.', env);
         }
         const email = await googleEmailFromCode(code, url, env);
         const allowed = (env.ALLOWED_EMAIL || '').toLowerCase();
         if (!email) return loginPage('구글 로그인에 실패했습니다.', env);
         if (allowed && email !== allowed) return loginPage('허용되지 않은 계정입니다: ' + email, env);
-        // 통과 → 세션 쿠키 발급 + state 쿠키 제거
-        const headers = new Headers({ Location: '/admin' });
-        headers.append('Set-Cookie', await makeSessionCookie(env.ADMIN_KEY));
-        headers.append('Set-Cookie', `eh_state=; HttpOnly; Secure; SameSite=Lax; Path=/admin; Max-Age=0`);
-        return new Response(null, { status: 303, headers });
+        // 통과 → 세션 쿠키 발급
+        return new Response(null, { status: 303, headers: { Location: '/admin', 'Set-Cookie': await makeSessionCookie(env.ADMIN_KEY) } });
       }
 
       // 인증 확인 (쿠키 우선, 없으면 Bearer/key). 미인증이면 로그인 폼.
@@ -217,7 +211,8 @@ async function makeSessionCookie(secret) {
   const exp = Date.now() + SESS_DAYS * 864e5;
   const token = exp + '.' + await sign(exp, secret);
   const maxAge = SESS_DAYS * 86400;
-  return `${COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/admin; Max-Age=${maxAge}`;
+  // SameSite=Lax: 구글 OAuth 콜백 후 /admin 리다이렉트에서도 쿠키가 전송되도록(Strict면 첫 요청에 누락될 수 있음)
+  return `${COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/admin; Max-Age=${maxAge}`;
 }
 async function cookieValid(req, secret) {
   const raw = req.headers.get('Cookie') || '';
@@ -241,10 +236,18 @@ async function isAuthed(req, env) {
    흐름: /admin/google → 구글 동의 → /admin/callback → 이메일 확인 → 세션 쿠키 */
 const OAUTH_REDIRECT_PATH = '/admin/callback';
 function redirectUri(url) { return url.origin + OAUTH_REDIRECT_PATH; }
-// 짧은 수명의 state 쿠키(CSRF 방지). 값은 랜덤, 서명 불필요(콜백에서 쿠키값과 쿼리값 일치만 확인).
-function randomState() {
-  const b = new Uint8Array(16); crypto.getRandomValues(b);
-  return b64url(b.buffer);
+// state: 쿠키에 의존하지 않고 값 자체에 HMAC 서명을 담는다.
+// 형식 "<발급시각>.<서명>". 콜백에서 서명·만료만 검증하면 되어 쿠키 누락 문제가 없다.
+async function makeState(secret) {
+  const ts = Date.now();
+  return ts + '.' + await sign('state:' + ts, secret);
+}
+async function stateValid(state, secret) {
+  if (!state) return false;
+  const [ts, sig] = String(state).split('.');
+  if (!ts || !sig) return false;
+  if (Date.now() - Number(ts) > 600000) return false;   // 10분 초과 만료
+  return safeEqual(sig, await sign('state:' + ts, secret));
 }
 function googleAuthUrl(url, clientId, state) {
   const p = new URLSearchParams({
