@@ -81,18 +81,50 @@ export default {
         if (safeEqual(pw, env.ADMIN_KEY)) {
           return new Response(null, { status: 303, headers: { Location: '/admin', 'Set-Cookie': await makeSessionCookie(env.ADMIN_KEY) } });
         }
-        return loginPage('비밀번호가 맞지 않습니다.');
+        return loginPage('비밀번호가 맞지 않습니다.', env);
       }
       // 로그아웃: 쿠키 제거
       if (url.pathname === '/admin/logout') {
         return new Response(null, { status: 303, headers: { Location: '/admin', 'Set-Cookie': `${COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/admin; Max-Age=0` } });
       }
 
+      // 구글 로그인 시작: state 쿠키를 심고 구글 동의 화면으로 보낸다.
+      if (url.pathname === '/admin/google') {
+        if (!googleConfigured(env)) return new Response('구글 로그인이 설정되지 않았습니다.', { status: 503 });
+        const state = randomState();
+        const headers = new Headers({ Location: googleAuthUrl(url, env.GOOGLE_CLIENT_ID, state) });
+        // state는 10분짜리 쿠키로 저장(SameSite=Lax 여야 구글에서 돌아올 때 전송됨)
+        headers.append('Set-Cookie', `eh_state=${state}; HttpOnly; Secure; SameSite=Lax; Path=/admin; Max-Age=600`);
+        return new Response(null, { status: 303, headers });
+      }
+
+      // 구글 콜백: code→이메일 교환, 허용 계정이면 세션 쿠키 발급.
+      if (url.pathname === OAUTH_REDIRECT_PATH) {
+        const code = url.searchParams.get('code');
+        const retState = url.searchParams.get('state');
+        const rawCookie = req.headers.get('Cookie') || '';
+        const stm = rawCookie.match(/(?:^|;\s*)eh_state=([^;]+)/);
+        const savedState = stm ? decodeURIComponent(stm[1]) : '';
+        // CSRF: 쿼리의 state와 쿠키의 state가 일치해야 한다
+        if (!code || !retState || !savedState || !safeEqual(retState, savedState)) {
+          return loginPage('로그인 세션이 올바르지 않습니다. 다시 시도해 주세요.', env);
+        }
+        const email = await googleEmailFromCode(code, url, env);
+        const allowed = (env.ALLOWED_EMAIL || '').toLowerCase();
+        if (!email) return loginPage('구글 로그인에 실패했습니다.', env);
+        if (allowed && email !== allowed) return loginPage('허용되지 않은 계정입니다: ' + email, env);
+        // 통과 → 세션 쿠키 발급 + state 쿠키 제거
+        const headers = new Headers({ Location: '/admin' });
+        headers.append('Set-Cookie', await makeSessionCookie(env.ADMIN_KEY));
+        headers.append('Set-Cookie', `eh_state=; HttpOnly; Secure; SameSite=Lax; Path=/admin; Max-Age=0`);
+        return new Response(null, { status: 303, headers });
+      }
+
       // 인증 확인 (쿠키 우선, 없으면 Bearer/key). 미인증이면 로그인 폼.
       if (!(await isAuthed(req, env))) {
         // 스크립트/프로그램 접근(JSON/내보내기 등)은 폼 대신 401
         if (url.pathname !== '/admin') return new Response('no', { status: 401 });
-        return loginPage();
+        return loginPage(undefined, env);
       }
 
       // 메모 저장 — 닉네임(사람) 단위로 실명 등 신원 메모를 남긴다.
@@ -204,6 +236,54 @@ async function isAuthed(req, env) {
   return !!k && safeEqual(k, env.ADMIN_KEY);
 }
 
+/* ── 구글 OAuth 로그인 ──────────────────────────────────────────
+   설정값(시크릿): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ALLOWED_EMAIL
+   흐름: /admin/google → 구글 동의 → /admin/callback → 이메일 확인 → 세션 쿠키 */
+const OAUTH_REDIRECT_PATH = '/admin/callback';
+function redirectUri(url) { return url.origin + OAUTH_REDIRECT_PATH; }
+// 짧은 수명의 state 쿠키(CSRF 방지). 값은 랜덤, 서명 불필요(콜백에서 쿠키값과 쿼리값 일치만 확인).
+function randomState() {
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
+  return b64url(b.buffer);
+}
+function googleAuthUrl(url, clientId, state) {
+  const p = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri(url),
+    response_type: 'code',
+    scope: 'openid email',
+    state,
+    prompt: 'select_account',
+    access_type: 'online'
+  });
+  return 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString();
+}
+// 구글이 준 code를 토큰으로 교환하고, id_token에서 이메일을 꺼낸다.
+async function googleEmailFromCode(code, url, env) {
+  const body = new URLSearchParams({
+    code,
+    client_id: env.GOOGLE_CLIENT_ID,
+    client_secret: env.GOOGLE_CLIENT_SECRET,
+    redirect_uri: redirectUri(url),
+    grant_type: 'authorization_code'
+  });
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body
+  });
+  if (!res.ok) return null;
+  const tok = await res.json();
+  if (!tok.id_token) return null;
+  // id_token은 JWT. 서명 검증은 생략하고(교환이 HTTPS로 구글과 직접 이뤄짐) payload의 email/verified만 읽는다.
+  const parts = tok.id_token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const json = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))));
+    if (json.email && json.email_verified) return String(json.email).toLowerCase();
+  } catch { /* noop */ }
+  return null;
+}
+const googleConfigured = env => !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+
 // 응답 전체를 페이지네이션으로 모두 읽어 최신순 정렬 (KV list 1000개 한도 대응)
 async function listAllResponses(env) {
   const rows = [];
@@ -221,28 +301,44 @@ async function listAllResponses(env) {
 }
 
 // 로그인 화면 — 토큰(비밀번호) 한 번 입력하면 쿠키로 기억한다.
-function loginPage(err) {
+function loginPage(err, env) {
+  const hasGoogle = !!(env && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+  const googleBtn = hasGoogle ? `
+    <a class="gbtn" href="/admin/google">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      <span>Google로 로그인</span>
+    </a>` : `<p class="warn503">구글 로그인이 아직 설정되지 않았습니다.</p>`;
   const body = `<div class="login">
     <h1>은호당 · 관리자</h1>
-    <p class="sub">접속 비밀번호를 입력하세요.</p>
-    <form method="POST" action="/admin/login">
-      <input type="password" name="pw" placeholder="비밀번호" autocomplete="current-password" autofocus>
-      <button type="submit">들어가기</button>
-      ${err ? `<p class="err">${esc(err)}</p>` : ''}
-    </form>
+    <p class="sub">관리자 계정으로 로그인하세요.</p>
+    ${googleBtn}
+    ${err ? `<p class="err">${esc(err)}</p>` : ''}
+    <details class="pwbox">
+      <summary>비밀번호로 로그인</summary>
+      <form method="POST" action="/admin/login">
+        <input type="password" name="pw" placeholder="비밀번호" autocomplete="current-password">
+        <button type="submit">들어가기</button>
+      </form>
+    </details>
     <p class="note">이 기기에서 30일간 로그인 상태가 유지됩니다.</p>
   </div>
   <style>
-    .login{max-width:20rem;margin:18vh auto 0;text-align:center}
+    .login{max-width:20rem;margin:16vh auto 0;text-align:center}
     .login h1{font-size:1.3rem;font-weight:600;margin:0 0 .3rem}
-    .login .sub{color:#C1A094;font-size:.9rem;margin:0 0 1.6rem}
-    .login form{display:flex;flex-direction:column;gap:.7rem}
-    .login input{font:inherit;font-size:1rem;color:#F0E6DD;background:#2A201E;border:1px solid #463531;border-radius:12px;padding:.8rem 1rem;text-align:center}
-    .login input:focus{outline:none;border-color:#C1A094}
-    .login button{font:inherit;font-size:1rem;font-weight:600;color:#231A17;background:#C1A094;border:0;border-radius:999px;padding:.85rem;cursor:pointer}
-    .login button:active{filter:brightness(.93)}
-    .login .err{color:#E0A79A;font-size:.85rem;margin:.2rem 0 0}
-    .login .note{color:#8A7368;font-size:.78rem;margin:1.4rem 0 0}
+    .login .sub{color:#C1A094;font-size:.9rem;margin:0 0 1.8rem}
+    .gbtn{display:flex;align-items:center;justify-content:center;gap:.6rem;background:#F0E6DD;color:#231A17;
+      text-decoration:none;font-weight:600;font-size:1rem;border-radius:999px;padding:.85rem;box-shadow:0 2px 10px rgba(0,0,0,.28);transition:filter .2s}
+    .gbtn:active{filter:brightness(.95)}
+    .warn503{color:#E0A79A;font-size:.9rem}
+    .login .err{color:#E0A79A;font-size:.85rem;margin:1rem 0 0}
+    .pwbox{margin:1.6rem 0 0;text-align:left}
+    .pwbox summary{color:#8A7368;font-size:.82rem;cursor:pointer;text-align:center;list-style:none}
+    .pwbox summary::-webkit-details-marker{display:none}
+    .pwbox form{display:flex;flex-direction:column;gap:.6rem;margin:.8rem 0 0}
+    .pwbox input{font:inherit;font-size:1rem;color:#F0E6DD;background:#2A201E;border:1px solid #463531;border-radius:12px;padding:.75rem 1rem;text-align:center}
+    .pwbox input:focus{outline:none;border-color:#C1A094}
+    .pwbox button{font:inherit;font-size:.95rem;font-weight:600;color:#231A17;background:#C1A094;border:0;border-radius:999px;padding:.75rem;cursor:pointer}
+    .login .note{color:#8A7368;font-size:.78rem;margin:1.6rem 0 0}
   </style>`;
   return html(body);
 }
