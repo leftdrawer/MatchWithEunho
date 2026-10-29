@@ -56,13 +56,12 @@ export default {
       return new Response('ok', { headers: cors });
     }
 
-    // PWA manifest — 관리자 홈 화면 앱용. key를 그대로 실어 start_url 에 넣는다.
+    // PWA manifest — 관리자 홈 화면 앱용. 인증은 쿠키로 하므로 start_url 에 키를 싣지 않는다.
     if (url.pathname === '/manifest.webmanifest') {
-      const key = url.searchParams.get('key') || '';
       const iconBase = 'https://leftdrawer.github.io/MatchWithEunho/icons';
       const manifest = {
         name: '테스트 결과', short_name: '테스트 결과',
-        start_url: '/admin?key=' + encodeURIComponent(key),
+        start_url: '/admin',
         scope: '/admin', display: 'standalone', orientation: 'portrait',
         background_color: '#1C1715', theme_color: '#1C1715', lang: 'ko',
         icons: [
@@ -75,12 +74,28 @@ export default {
     }
 
     if (url.pathname.startsWith('/admin')) {
-      // 관리자 인증: Authorization: Bearer 헤더 우선, ?key= 쿼리는 하위 호환용으로 유지
-      if (getAdminKey(req) !== env.ADMIN_KEY) return new Response('no', { status: 401 });
-      const key = url.searchParams.get('key');
+      // 로그인 처리: 폼에서 받은 토큰이 맞으면 세션 쿠키를 심고 /admin 으로 보낸다.
+      if (url.pathname === '/admin/login' && req.method === 'POST') {
+        const form = await req.formData().catch(() => null);
+        const pw = form ? String(form.get('pw') || '') : '';
+        if (safeEqual(pw, env.ADMIN_KEY)) {
+          return new Response(null, { status: 303, headers: { Location: '/admin', 'Set-Cookie': await makeSessionCookie(env.ADMIN_KEY) } });
+        }
+        return loginPage('비밀번호가 맞지 않습니다.');
+      }
+      // 로그아웃: 쿠키 제거
+      if (url.pathname === '/admin/logout') {
+        return new Response(null, { status: 303, headers: { Location: '/admin', 'Set-Cookie': `${COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/admin; Max-Age=0` } });
+      }
+
+      // 인증 확인 (쿠키 우선, 없으면 Bearer/key). 미인증이면 로그인 폼.
+      if (!(await isAuthed(req, env))) {
+        // 스크립트/프로그램 접근(JSON/내보내기 등)은 폼 대신 401
+        if (url.pathname !== '/admin') return new Response('no', { status: 401 });
+        return loginPage();
+      }
 
       // 메모 저장 — 닉네임(사람) 단위로 실명 등 신원 메모를 남긴다.
-      // POST /admin/note  body: { person: '<그룹키>', note: '<메모>' }
       if (url.pathname === '/admin/note' && req.method === 'POST') {
         let body;
         try { body = await req.json(); } catch { return new Response('bad json', { status: 400 }); }
@@ -92,28 +107,45 @@ export default {
         return new Response('ok');
       }
 
+      // 응답 삭제 — 세션 id 한 건을 지운다. POST /admin/delete body:{ id }
+      if (url.pathname === '/admin/delete' && req.method === 'POST') {
+        let body;
+        try { body = await req.json(); } catch { return new Response('bad json', { status: 400 }); }
+        const id = String(body.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 32);
+        if (!id) return new Response('no id', { status: 400 });
+        await env.DB.delete('r:' + id);
+        return new Response('ok');
+      }
+
+      // 전체 응답 내보내기 — JSON. GET /admin/export
+      if (url.pathname === '/admin/export') {
+        const all = await listAllResponses(env);
+        const notesMap = {};
+        for (const r of all) { const pk = personKey(r); if (!(pk in notesMap)) notesMap[pk] = await env.DB.get('m:' + pk) || ''; }
+        const out = all.map(r => ({ ...r, _note: notesMap[personKey(r)] || '' }));
+        return new Response(JSON.stringify(out, null, 2), {
+          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="eunho-responses.json"' }
+        });
+      }
+
       const one = url.pathname.split('/')[2];
-      const list = await env.DB.list({ prefix: 'r:' });
-      const rows = [];
-      for (const k of list.keys) rows.push(await env.DB.get(k.name, 'json'));
-      rows.sort((a, b) => (b?.last || '').localeCompare(a?.last || ''));
+      const rows = await listAllResponses(env);
       if (one) {
         const r = rows.find(x => x && x.id === one);
         if (!r) return new Response('없음', { status: 404 });
         const note = await env.DB.get('m:' + personKey(r)) || '';
-        return html(detail(r, note, key), key);
+        return html(detail(r, note));
       }
       // 목록: 각 사람의 메모를 한번에 읽어 넘긴다.
-      const valid = rows.filter(Boolean);
       const notes = {};
       const seen = new Set();
-      for (const r of valid) {
+      for (const r of rows) {
         const pk = personKey(r);
         if (seen.has(pk)) continue;
         seen.add(pk);
         notes[pk] = await env.DB.get('m:' + pk) || '';
       }
-      return html(table(valid, key, notes), key);
+      return html(table(rows, notes));
     }
 
     return new Response('은호당', { status: 200 });
@@ -128,6 +160,92 @@ const getAdminKey = req => {
   if (m) return m[1].trim();
   return new URL(req.url).searchParams.get('key') || '';
 };
+
+/* ── 쿠키 기반 로그인 ──────────────────────────────────────────
+   브라우저 접속은 ?key= 없이, 로그인 폼에서 토큰을 한 번 입력하면
+   HMAC 서명된 세션 쿠키를 받아 이후 자동 인증된다.
+   쿠키에는 토큰 자체가 아니라 "만료시각.서명"만 담겨, 유출돼도 위조·재사용이 어렵다. */
+const COOKIE = 'eh_sess';
+const SESS_DAYS = 30;
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+// ADMIN_KEY로 "exp" 문자열을 HMAC-SHA256 서명
+async function sign(exp, secret) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(String(exp)));
+  return b64url(sig);
+}
+// 상수시간 문자열 비교 (타이밍 공격 완화)
+function safeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+async function makeSessionCookie(secret) {
+  const exp = Date.now() + SESS_DAYS * 864e5;
+  const token = exp + '.' + await sign(exp, secret);
+  const maxAge = SESS_DAYS * 86400;
+  return `${COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/admin; Max-Age=${maxAge}`;
+}
+async function cookieValid(req, secret) {
+  const raw = req.headers.get('Cookie') || '';
+  const m = raw.match(new RegExp('(?:^|;\\s*)' + COOKIE + '=([^;]+)'));
+  if (!m) return false;
+  const [exp, sig] = decodeURIComponent(m[1]).split('.');
+  if (!exp || !sig) return false;
+  if (Date.now() > Number(exp)) return false;               // 만료
+  const expect = await sign(exp, secret);
+  return safeEqual(sig, expect);                            // 서명 일치?
+}
+// 브라우저가 인증됐는지: 유효한 세션 쿠키 OR Bearer/key 가 ADMIN_KEY 와 일치
+async function isAuthed(req, env) {
+  if (await cookieValid(req, env.ADMIN_KEY)) return true;
+  const k = getAdminKey(req);
+  return !!k && safeEqual(k, env.ADMIN_KEY);
+}
+
+// 응답 전체를 페이지네이션으로 모두 읽어 최신순 정렬 (KV list 1000개 한도 대응)
+async function listAllResponses(env) {
+  const rows = [];
+  let cursor;
+  do {
+    const page = await env.DB.list({ prefix: 'r:', cursor });
+    for (const k of page.keys) {
+      const r = await env.DB.get(k.name, 'json');
+      if (r) rows.push(r);
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  rows.sort((a, b) => (b?.last || '').localeCompare(a?.last || ''));
+  return rows;
+}
+
+// 로그인 화면 — 토큰(비밀번호) 한 번 입력하면 쿠키로 기억한다.
+function loginPage(err) {
+  const body = `<div class="login">
+    <h1>은호당 · 관리자</h1>
+    <p class="sub">접속 비밀번호를 입력하세요.</p>
+    <form method="POST" action="/admin/login">
+      <input type="password" name="pw" placeholder="비밀번호" autocomplete="current-password" autofocus>
+      <button type="submit">들어가기</button>
+      ${err ? `<p class="err">${esc(err)}</p>` : ''}
+    </form>
+    <p class="note">이 기기에서 30일간 로그인 상태가 유지됩니다.</p>
+  </div>
+  <style>
+    .login{max-width:20rem;margin:18vh auto 0;text-align:center}
+    .login h1{font-size:1.3rem;font-weight:600;margin:0 0 .3rem}
+    .login .sub{color:#C1A094;font-size:.9rem;margin:0 0 1.6rem}
+    .login form{display:flex;flex-direction:column;gap:.7rem}
+    .login input{font:inherit;font-size:1rem;color:#F0E6DD;background:#2A201E;border:1px solid #463531;border-radius:12px;padding:.8rem 1rem;text-align:center}
+    .login input:focus{outline:none;border-color:#C1A094}
+    .login button{font:inherit;font-size:1rem;font-weight:600;color:#231A17;background:#C1A094;border:0;border-radius:999px;padding:.85rem;cursor:pointer}
+    .login button:active{filter:brightness(.93)}
+    .login .err{color:#E0A79A;font-size:.85rem;margin:.2rem 0 0}
+    .login .note{color:#8A7368;font-size:.78rem;margin:1.4rem 0 0}
+  </style>`;
+  return html(body);
+}
 // /submit 레이트 리밋: IP당 1분에 60회. KV에 2분 TTL 카운터를 둔다.
 const checkRateLimit = async (req, env) => {
   const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
@@ -150,16 +268,19 @@ const kst = iso => {
   const p = n => String(n).padStart(2, '0');
   return `${k.getUTCFullYear()}-${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
 };
-const html = (b, key) => new Response(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+const html = (b) => new Response(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>응답</title>
 <meta name="theme-color" content="#1C1715">
-${key ? `<link rel="manifest" href="/manifest.webmanifest?key=${encodeURIComponent(key)}">` : ''}
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="https://leftdrawer.github.io/MatchWithEunho/icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="테스트 결과"><style>
-body{margin:0;background:#1C1715;color:#F0E6DD;font:15px/1.6 'Pretendard','Apple SD Gothic Neo',system-ui,sans-serif;padding:1.5rem}
-h1{font-size:1.3rem;font-weight:600;margin:0 0 1.25rem}
+body{margin:0;background:#1C1715;color:#F0E6DD;font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Apple SD Gothic Neo','Pretendard','Malgun Gothic',system-ui,sans-serif;
+  padding:1.5rem max(1.5rem,env(safe-area-inset-right)) max(1.5rem,env(safe-area-inset-bottom)) max(1.5rem,env(safe-area-inset-left));
+  max-width:46rem;margin:0 auto;word-break:keep-all;overflow-wrap:break-word}
+h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em;margin:0 0 1.25rem}
 table{width:100%;border-collapse:collapse;font-size:.9rem}
 th,td{text-align:left;padding:.6rem .5rem;border-bottom:1px solid #463531}
 th{color:#D8B9AB;font-weight:600;font-size:.78rem;letter-spacing:.1em}
@@ -258,7 +379,7 @@ function personKey(r) {
   return (r.name && r.name.trim()) ? '이름:' + r.name.trim() : '무명:' + r.id;
 }
 
-function table(rows, key, notes = {}) {
+function table(rows, notes = {}) {
   // 같은 닉네임끼리 묶는다. 이름이 없으면 세션 id로 각각 취급.
   const groups = new Map();
   for (const r of rows) {
@@ -282,7 +403,7 @@ function table(rows, key, notes = {}) {
     const note = notes[pk] || '';
     // 그룹 헤더 행
     const head = `<tr class="grp">
-      <td><a href="/admin/${esc(rep.id)}?key=${encodeURIComponent(key)}">${name}</a>${multi ? ` <span class="cnt">${sessions.length}회</span>` : ''}</td>
+      <td><a href="/admin/${esc(rep.id)}">${name}</a>${multi ? ` <span class="cnt">${sessions.length}회</span>` : ''}</td>
       <td>${stateCell(rep)}</td>
       <td>${rep.total ?? '—'}</td>
       <td>${esc(kst(rep.last))}</td>
@@ -293,18 +414,23 @@ function table(rows, key, notes = {}) {
         data-person="${esc(pk)}" data-saved="${esc(note)}">
       <span class="notestat"></span>
     </td></tr>`;
-    // 세션이 여럿이면 나머지도 들여쓰기해 표시
+    // 세션이 여럿이면 나머지도 들여쓰기해 표시 (각 세션에 삭제 버튼)
     const subs = multi ? sessions.filter(s => s.id !== rep.id).map(s => {
       const t = kst(s.last).slice(5); // "MM-DD HH:MM"
       const label = s.done ? (s.gates?.length ? '탈락' : '완료') : `${s.step}/${s.of}`;
       return `<tr class="sub">
-      <td>└ <a href="/admin/${esc(s.id)}?key=${encodeURIComponent(key)}">${esc(label)} · ${esc(t)}</a></td>
+      <td>└ <a href="/admin/${esc(s.id)}">${esc(label)} · ${esc(t)}</a></td>
       <td>${stateCell(s)}</td>
       <td>${s.total ?? '—'}</td>
-      <td>${esc(kst(s.last))}</td>
+      <td>${esc(kst(s.last))} <button class="del" data-id="${esc(s.id)}" title="이 회차 삭제">✕</button></td>
     </tr>`;
     }).join('') : '';
-    return head + noteRow + subs;
+    // 대표 세션 삭제 버튼은 헤더 마지막 칸에 덧붙인다
+    const headWithDel = head.replace(
+      `<td>${esc(kst(rep.last))}</td>\n    </tr>`,
+      `<td>${esc(kst(rep.last))} <button class="del" data-id="${esc(rep.id)}" title="이 회차 삭제">✕</button></td>\n    </tr>`
+    );
+    return headWithDel + noteRow + subs;
   }).join('');
 
   return `<style>
@@ -319,19 +445,27 @@ function table(rows, key, notes = {}) {
     .note::placeholder{color:#8A7368}
     .notestat{color:#D8B9AB;font-size:.75rem;margin-left:.5rem;vertical-align:middle}
     .notestat.err{color:#C0392B}
+    .toolbar{display:flex;gap:.6rem;align-items:center;justify-content:flex-end;margin:0 0 1rem}
+    .toolbar a{color:#C1A094;font-size:.82rem;text-decoration:none;border:1px solid #463531;border-radius:999px;padding:.35rem .9rem}
+    .toolbar a:hover{border-color:#C1A094;color:#F0E6DD}
+    .del{background:transparent;border:1px solid #463531;color:#A2857A;border-radius:999px;width:1.5rem;height:1.5rem;line-height:1;cursor:pointer;font-size:.75rem;margin-left:.4rem;vertical-align:middle}
+    .del:hover{border-color:#C0392B;color:#E0A79A}
   </style>
+  <div class="toolbar">
+    <a href="/admin/export">내보내기(JSON)</a>
+    <a href="/admin/logout">로그아웃</a>
+  </div>
   <h1>응답 ${rows.length}건 · ${arr.length}명</h1><table>
     <tr><th>닉네임</th><th>진행</th><th>점수</th><th>마지막(KST)</th></tr>${blocks}</table>
   <script>
   (function(){
-    var key = ${JSON.stringify(key)};
     function save(inp){
       var person = inp.getAttribute('data-person');
       var val = inp.value.trim();
       if (val === (inp.getAttribute('data-saved')||'')) return;   // 변경 없으면 무시
       var stat = inp.parentNode.querySelector('.notestat');
       stat.className = 'notestat'; stat.textContent = '저장 중…';
-      fetch('/admin/note?key=' + encodeURIComponent(key), {
+      fetch('/admin/note', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ person: person, note: val })
       }).then(function(r){
@@ -346,6 +480,20 @@ function table(rows, key, notes = {}) {
     document.querySelectorAll('.note').forEach(function(inp){
       inp.addEventListener('blur', function(){ save(inp); });
       inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
+    });
+    // 응답 삭제
+    document.querySelectorAll('.del').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = btn.getAttribute('data-id');
+        if (!confirm('이 응답을 삭제할까요? 되돌릴 수 없습니다.')) return;
+        fetch('/admin/delete', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ id: id })
+        }).then(function(r){
+          if (!r.ok) throw new Error('fail');
+          location.reload();
+        }).catch(function(){ alert('삭제 실패'); });
+      });
     });
   })();
   </script>`;
@@ -1016,7 +1164,7 @@ function appearanceTable(app) {
   return `<h2>외모·그 아래</h2><table class="appt">${rows}</table>`;
 }
 
-function detail(r, note = '', currentKey = '') {
+function detail(r, note = '') {
   const a = r.answers || {};
   const scales = computeScales(a);
   const rel = reliability(a, r.timing);
@@ -1055,14 +1203,13 @@ function detail(r, note = '', currentKey = '') {
       <span class="notestat"></span>
       <script>
       (function(){
-        var key = ${JSON.stringify(currentKey)};
         var inp = document.currentScript.parentNode.querySelector('.note');
         var stat = inp.parentNode.querySelector('.notestat');
         function save(){
           var val = inp.value.trim();
           if (val === (inp.getAttribute('data-saved')||'')) return;
           stat.className='notestat'; stat.textContent='저장 중…';
-          fetch('/admin/note?key=' + encodeURIComponent(key), {
+          fetch('/admin/note', {
             method:'POST', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({ person: inp.getAttribute('data-person'), note: val })
           }).then(function(r){ if(!r.ok) throw 0; inp.setAttribute('data-saved',val);
@@ -1075,7 +1222,8 @@ function detail(r, note = '', currentKey = '') {
       </script>
     </div>`;
 
-  return `<div class="band">
+  return `<p style="margin:0 0 1rem"><a href="/admin" style="color:#C1A094;text-decoration:none;font-size:.85rem">← 목록으로</a></p>
+    <div class="band">
       <div class="who">${who}</div>
       <div class="meta">${status} · ${esc(kst(r.last))} KST</div>
       <div class="ovbox">
