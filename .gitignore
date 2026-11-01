@@ -9,5 +9,8 @@ Thumbs.db
 # 로그/임시
 *.log
 
+# npm
+node_modules/
+
 # Cloudflare Wrangler 캐시
 .wrangler/
