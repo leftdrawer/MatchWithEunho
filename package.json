@@ -1,0 +1,16 @@
+{
+  "name": "matchwitheunho",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.11",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.156.0"
+  }
+}
