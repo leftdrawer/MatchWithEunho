@@ -2,6 +2,14 @@
 
 > 규칙: 상위 `C:\AI Projects\AGENTS.md`. 최신 항목이 위. 이 폴더는 git이 없어 동기화 대상이 아님.
 
+## 2026-11-16 — Astryx Stone 설문 화면 정돈
+
+- 무엇: Astryx Stone 0.7.16(MIT)을 로컬 CSS로 연결하고 입력·문항·결과 면, 본문 대비, 포커스와 좁은 화면 여백을 보강했다. 기존 로즈 베이지 정체성·설문·점수·Worker 흐름은 유지했다.
+- 왜: 설문 동작을 바꾸지 않고 시각 토큰과 포커스 상태를 일관되게 하기 위해.
+- 관련 파일: `index.html`, `astryx-stone-0.7.16.css`, `ASTRYX-LICENSE-0.7.16.txt`, `DESIGN.md`
+- 작업자: Cue AI assistant
+- 남은 일·확인 필요: 합성 입력으로 렌더링·포커스·좁은 화면 확인 후 로컬 커밋. 푸시·배포는 하지 않음.
+
 ## 2026-11-02 — AGENTS.md 새로 만듦
 
 - 무엇: 에이전트가 먼저 읽을 짧은 `AGENTS.md`(목적·구성·주의)를 만듦. 내용은 README·CHANGELOG에서 확인한 것만.
