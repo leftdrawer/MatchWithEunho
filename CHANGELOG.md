@@ -1,5 +1,11 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-02 — AGENTS.md 새로 만듦
+
+- 무엇: 에이전트가 먼저 읽을 짧은 `AGENTS.md`(목적·구성·주의)를 만듦. 내용은 README·CHANGELOG에서 확인한 것만.
+- 관련 파일: `AGENTS.md`(새로)
+- 작업자: Grok Bot (은호당님 승인 'A와 C부터', 점검 Page 자동 적용 항목)
+
 ## 2026-11-02
 
 - **워커 개발 도구·테스트·CI 추가.** `package.json`과 lockfile로 wrangler·vitest를 고정. `worker.js`의 관리자 인증(Bearer·`?key=`·세션 쿠키)과 `/submit` 레이트 리밋(IP당 1분 60회)을 로컬에서 검사. GitHub Actions가 push·pull request에서 `npm test`를 실행하며 시크릿은 필요 없음. 설문·워커 동작은 변경 없음.
