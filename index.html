@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-astryx-theme="stone">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -188,6 +188,53 @@ select:invalid{color:var(--stone);opacity:.7}
 .bye{padding:2.5rem 0 0;font-weight:400;line-height:1.9}
 .bye p{margin:0 0 1.5rem}
 .bye .nick{font-weight:700;font-size:1.5rem;color:var(--ivory);letter-spacing:-.02em}
+</style>
+<link rel="stylesheet" href="astryx-stone-0.7.16.css">
+  <style id="design-overrides-stone">
+
+/* Astryx Stone 0.7.16 — restrained dark survey; the existing warm, accessible identity stays. */
+:root {
+  color-scheme: dark;
+  --black: var(--color-background-body);
+  --ink: var(--color-background-body);
+  --card: var(--color-background-card);
+  --card2: var(--color-background-muted);
+  --ivory: var(--color-text-primary);
+  --stone: var(--color-text-secondary);
+  --brass: #D8B9AB;
+  --accent: var(--brass);
+  --accent-ink: #1C1715;
+  --cinnabar: var(--color-error);
+  --warn: var(--color-text-error);
+  --border: var(--color-border-emphasized);
+  --line: var(--color-border);
+  --line2: var(--color-border-emphasized);
+  --glass: 16,16,24;
+  --dur: var(--duration-medium);
+  --font-family-body: Outfit, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple SD Gothic Neo", Pretendard, "Malgun Gothic", sans-serif;
+  --font-family-heading: Montserrat, Outfit, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple SD Gothic Neo", Pretendard, "Malgun Gothic", sans-serif;
+}
+html { background: var(--black); color-scheme: dark; }
+body { background: var(--black); color: var(--ivory); font-family: var(--font-family-body); }
+.sup { color: var(--color-text-info); font-size: var(--text-supporting-size); letter-spacing: normal; margin: .25rem 0 .5rem; }
+.item, .bars, .saju { background: var(--card); border: 1px solid var(--color-border); border-radius: var(--radius-container); box-shadow: none; }
+input[type=text], input[type=number], select { background: var(--card2); color: var(--ivory); border-color: var(--color-border); }
+input::placeholder { color: var(--color-text-secondary); opacity: 1; }
+.page .lead, .hint, .ends, .bars li, .flags, .saju ul, .saju .pillars span { color: var(--color-text-secondary); }
+:where(button, a, input, select, textarea, [tabindex]):focus-visible,
+label:has(input:focus-visible) { outline: 3px solid var(--brass); outline-offset: 3px; }
+input, select, textarea { caret-color: var(--brass); }
+::selection { color: var(--color-text-primary); background: color-mix(in srgb, var(--brass) 32%, transparent); }
+:root { scrollbar-color: var(--color-border-emphasized) var(--black); }
+@media (max-width: 380px) {
+  .wrap { padding-inline: max(1rem, env(safe-area-inset-left)); }
+  .item { padding-inline: 1rem; }
+  .bar .in { gap: .5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
 </style>
 </head>
 <body>
