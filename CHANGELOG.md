@@ -2,6 +2,12 @@
 
 > 규칙: 상위 `C:\AI Projects\AGENTS.md`. 최신 항목이 위. 이 폴더는 git이 없어 동기화 대상이 아님.
 
+## 2026-11-02 — AGENTS.md 새로 만듦
+
+- 무엇: 에이전트가 먼저 읽을 짧은 `AGENTS.md`(목적·구성·주의)를 만듦. 내용은 README·CHANGELOG에서 확인한 것만.
+- 관련 파일: `AGENTS.md`(새로)
+- 작업자: Grok Bot (은호당님 승인 'A와 C부터', 점검 Page 자동 적용 항목)
+
 ## 2026-11-02 — 이 폴더를 GitHub 저장소(leftdrawer/MatchWithEunho)와 git으로 연결
 
 - 무엇: 이 폴더에 git을 만들고 `origin`(leftdrawer/MatchWithEunho, 공개)의 main을 받아 비교했다. 파일은 덮어쓰지 않았다(`git reset --mixed`로 기록만 맞춤). 코드·화면 파일(`index.html`·`worker.js`·`wrangler.toml`·`manifest.webmanifest`·`.gitignore`·fonts·icons)은 원격 main과 같다.
