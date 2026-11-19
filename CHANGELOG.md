@@ -2,6 +2,15 @@
 
 > 규칙: 상위 `C:\AI Projects\AGENTS.md`. 최신 항목이 위. 이 폴더는 git이 없어 동기화 대상이 아님.
 
+## 2026-11-19 — 올리지 않은 커밋 2개 push (정정 포함)
+
+- 사용자 지시: 올리지 않은 커밋 2개를 그대로 올릴 것
+- 확인한 사실: 이 폴더는 `main`이 아니라 `local-folder-changelog` 브랜치. 같은 Astryx Stone 디자인 갱신은 이미 `main`에 있음(`d9f7647`). 이 브랜치의 `index.html`·`worker.js`는 `origin/main`과 같음
+- 정정: 2026-11-17 루트 기록에 "GitHub 버전 대비 3,000줄 넘게 지워지고 공개 사이트에 바로 반영"이라고 적었으나 틀림. 그 차이는 `main`에만 있는 테스트·CI·`설치안내.md`를 이 별도 브랜치가 원래 갖고 있지 않아 생긴 것이고, push는 `main`과 공개 사이트를 바꾸지 않음
+- 한 일: `git push` → `origin/local-folder-changelog` `f534df2..14dee20`. 라이브 페이지(`leftdrawer.github.io/MatchWithEunho`)는 `origin/main`의 `index.html`과 바이트 단위로 같고 Astryx가 적용돼 있음을 확인
+- 참고: 위 머리말의 "git이 없어 동기화 대상이 아님"은 지금은 사실이 아님(이 폴더는 git 저장소, 원격 `leftdrawer/MatchWithEunho`). 머리말은 지난 기록이라 고치지 않음
+- 작업자: Claude Code / Opus 5.5
+
 ## 2026-11-16 — Astryx Stone 설문 화면 정돈
 
 - 무엇: Astryx Stone 0.7.16(MIT)을 로컬 CSS로 연결하고 입력·문항·결과 면, 본문 대비, 포커스와 좁은 화면 여백을 보강했다. 기존 로즈 베이지 정체성·설문·점수·Worker 흐름은 유지했다.
