@@ -17,7 +17,6 @@
 <link rel="stylesheet" href="./vendor/astryx/fonts.css">
 <link rel="stylesheet" href="./vendor/astryx/theme-chocolate.css">
 <style>
-@font-face{font-family:'Pretendard';font-weight:300;font-style:normal;font-display:swap;src:url('./fonts/Pretendard-Light.subset.woff2') format('woff2')}
 @font-face{font-family:'Pretendard';font-weight:400;font-style:normal;font-display:swap;src:url('./fonts/Pretendard-Regular.subset.woff2') format('woff2')}
 @font-face{font-family:'Pretendard';font-weight:600;font-style:normal;font-display:swap;src:url('./fonts/Pretendard-SemiBold.subset.woff2') format('woff2')}
 @font-face{font-family:'Pretendard';font-weight:700;font-style:normal;font-display:swap;src:url('./fonts/Pretendard-Bold.subset.woff2') format('woff2')}
@@ -9343,7 +9342,8 @@ function score(a) {
     for (const it of p.items){
       const hid = it.showIf && A[it.showIf[0]] !== it.showIf[1] ? ' hidden' : '';
       h += `<div class="item${hid}" data-id="${it.id}"${it.showIf?` data-showif="${it.showIf[0]}|${esc(it.showIf[1])}"`:''}>`;
-      h += `<label class="q" for="i-${it.id}">${it.qHtml || esc(it.q)}</label>`;
+      const field = it.type === 'text' || it.type === 'ymd' || it.type === 'hm' || it.type === 'int' || it.type === 'half' || it.type === 'select' || it.type === 'pts';
+      h += `<label class="q"${field ? ` for="i-${it.id}"` : ''}>${it.qHtml || esc(it.q)}</label>`;
       const v = A[it.id];
       if (it.type === 'text') h += `<input type="text" id="i-${it.id}" name="${it.id}" placeholder="${esc(it.ph||'')}" value="${v?esc(v):''}">`;
       else if (it.type === 'ymd') h += `<input type="text" id="i-${it.id}" name="${it.id}" inputmode="numeric" maxlength="8" placeholder="${esc(it.ph)}" value="${A.P02raw?esc(A.P02raw):''}"><p class="hint" id="h-P02">숫자 여덟 자리</p>`;

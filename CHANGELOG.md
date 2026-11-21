@@ -1,5 +1,13 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-21 — 저장소 점검
+
+- 무엇: 머지 뒤 저장소를 점검했다. 쓰이지 않는 Pretendard Light를 뺐다. 입력칸이 없는 문항의 잘못된 `for`를 뺐다. 관리자 화면의 포커스 링과 44px 높이를 보강했다. 채점 함수에 최소 테스트를 더했다. README에서 없는 `sw.js` 설명을 고쳤다.
+- 왜: 동작·주소·저장 형식은 유지한 채, 확인된 접근성·용량·문서 어긋남만 고치기 위해.
+- 관련 파일: `index.html`, `worker.js`, `test/score.spec.js`, `vitest.config.js`, `README.md`, `fonts/Pretendard-Light.subset.woff2`(삭제), `CHANGELOG.md`
+- 작업자: Cursor Cloud Agent (Grok Bot 구록이 경유)
+- 남은 일·확인 필요: 워커 화면 수정은 저장소에만 있다. Cloudflare에 반영하려면 사람이 `설치안내.md`대로 워커를 다시 넣어야 한다. 이번 점검에서는 배포하지 않음.
+
 ## 2026-11-13 — astryx 테마 이식으로 UX/UI 정비
 
 - 무엇을 바꿨는지 / 사용자 지시: "astryx와 stageshow를 활용해 웹에 배포된 사이트 UXUI 손보기", 테마만 이식하고 HIG는 보조 기준. React로 다시 쓰지 않고 `index.html`의 스타일만 Astryx Chocolate 0.7.16 토큰(색, 글꼴, 크기, 모서리, 간격)으로 바꿨다. 라이트·다크는 `color-scheme`과 테마의 `light-dark()`를 따른다. 한국어 폴백은 Apple SD Gothic Neo / Pretendard. stageshow 일러스트는 마케팅 히어로가 없어 넣지 않았다. 문항·채점·URL·Worker·KV 설정은 그대로다.
