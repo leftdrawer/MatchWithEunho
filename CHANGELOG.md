@@ -1,5 +1,13 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-13 — astryx 테마 이식으로 UX/UI 정비
+
+- 무엇을 바꿨는지 / 사용자 지시: "astryx와 stageshow를 활용해 웹에 배포된 사이트 UXUI 손보기", 테마만 이식하고 HIG는 보조 기준. React로 다시 쓰지 않고 `index.html`의 스타일만 Astryx Chocolate 0.7.16 토큰(색, 글꼴, 크기, 모서리, 간격)으로 바꿨다. 라이트·다크는 `color-scheme`과 테마의 `light-dark()`를 따른다. 한국어 폴백은 Apple SD Gothic Neo / Pretendard. stageshow 일러스트는 마케팅 히어로가 없어 넣지 않았다. 문항·채점·URL·Worker·KV 설정은 그대로다.
+- 왜: 설문 분위기가 따뜻한 먹색·한지·놋빛이라 Chocolate가 Stone보다 맞다. Stone 0.7.16 악센트는 차가운 잉크색이라 기존 화면이 로즈 베이지를 다시 박아 두고 다크만 강제했다. 테마 토큰으로 바꾸면 라이트(한지)와 다크(먹)가 한 팔레트에서 나오고, 포커스·44px·reduced-motion은 토큰이 비운 자리만 HIG로 메운다.
+- 관련 파일: `index.html`, `vendor/astryx/theme-chocolate.css`, `vendor/astryx/fonts.css`, `vendor/astryx/LICENSE`, `fonts/albert-sans-latin-wght-normal.woff2`, `fonts/fraunces-latin-full-normal.woff2`, `fonts/jetbrains-mono-latin-400-normal.woff2`, `fonts/LICENSE-*.txt`, `manifest.webmanifest`, `DESIGN.md`, `CHANGELOG.md`. 제거: `astryx-stone-0.7.16.css`, `ASTRYX-LICENSE-0.7.16.txt`
+- 작업자: Cursor Cloud Agent (Grok Bot 구록이 경유)
+- 남은 일·확인 필요: 배포는 하지 않음. GitHub Pages는 이 PR을 머지해야 바뀐다. `@scope`가 없는 2024년 이전 브라우저는 `astryx-base` 폴백 토큰만 쓴다. 실기기 360px·VoiceOver는 헤드리스 스크린샷으로만 확인했다. 라이트 보조 글자는 테마 `--color-text-secondary`가 카드 위에서 AA 미달이라 `--text-quiet`로 보정했다.
+
 ## 2026-11-16 — Astryx Stone 설문 화면 정돈
 
 - 무엇: Astryx Stone 0.7.16(MIT)을 로컬 CSS로 연결하고 입력·문항·결과 면, 본문 대비, 포커스와 좁은 화면 여백을 보강했다. 기존 로즈 베이지 정체성·설문·점수·Worker 흐름은 유지했다.
