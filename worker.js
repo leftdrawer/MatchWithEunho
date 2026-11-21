@@ -339,7 +339,9 @@ function loginPage(err, env) {
     .pwbox summary::-webkit-details-marker{display:none}
     .pwbox form{display:flex;flex-direction:column;gap:.6rem;margin:.8rem 0 0}
     .pwbox input{font:inherit;font-size:1rem;color:#F0E6DD;background:#2A201E;border:1px solid #463531;border-radius:12px;padding:.75rem 1rem;text-align:center}
-    .pwbox input:focus{outline:none;border-color:#C1A094}
+    .pwbox input,.pwbox button,.gbtn{min-height:44px}
+    .pwbox input:focus-visible,.pwbox button:focus-visible,.gbtn:focus-visible{outline:2px solid #D8B9AB;outline-offset:3px}
+    .pwbox input:focus{border-color:#C1A094}
     .pwbox button{font:inherit;font-size:.95rem;font-weight:600;color:#231A17;background:#C1A094;border:0;border-radius:999px;padding:.75rem;cursor:pointer}
     .login .note{color:#8A7368;font-size:.78rem;margin:1.6rem 0 0}
   </style>`;
@@ -439,7 +441,9 @@ section{margin:1.6rem 0;break-inside:avoid}
 .notebox{border:1px solid #463531;border-left:3px solid #D8B9AB;border-radius:2px;padding:.8rem 1rem;margin:0 0 1.2rem}
 .notebox label{display:block;color:#D8B9AB;font-size:.78rem;letter-spacing:.08em;margin:0 0 .4rem}
 .notebox .note{width:100%;background:transparent;border:1px solid #463531;border-radius:2px;color:#F0E6DD;font:inherit;font-size:.9rem;padding:.5rem .6rem}
-.notebox .note:focus{outline:none;border-color:#D8B9AB}
+.notebox .note{min-height:44px}
+.notebox .note:focus{border-color:#D8B9AB}
+.notebox .note:focus-visible{outline:2px solid #D8B9AB;outline-offset:3px}
 .notebox .note::placeholder{color:#8A7368}
 .notebox .notestat{color:#D8B9AB;font-size:.78rem;margin-left:.5rem}
 .notebox .notestat.err{color:#C0392B}
@@ -540,7 +544,9 @@ function table(rows, notes = {}) {
     .noterow td{border-bottom:none;padding-top:.15rem;padding-bottom:.5rem}
     .note{width:100%;max-width:26rem;background:transparent;border:1px solid #463531;border-radius:2px;
       color:#F0E6DD;font:inherit;font-size:.82rem;padding:.4rem .55rem}
-    .note:focus{outline:none;border-color:#D8B9AB}
+    .note{min-height:44px}
+    .note:focus{border-color:#D8B9AB}
+    .note:focus-visible{outline:2px solid #D8B9AB;outline-offset:3px}
     .note::placeholder{color:#8A7368}
     .notestat{color:#D8B9AB;font-size:.75rem;margin-left:.5rem;vertical-align:middle}
     .notestat.err{color:#C0392B}

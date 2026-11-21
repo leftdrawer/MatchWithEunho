@@ -10,7 +10,7 @@
 - `index.html` — 설문 PWA 본체
 - `worker.js` — 응답 수집 워커. Cloudflare Workers 편집기에 그대로 붙여넣어 배포
 - `설치안내.md` — 워커·KV·ADMIN_KEY 설정 가이드
-- `sw.js`, `manifest.webmanifest`, `icons/` — PWA 지원 파일
+- `manifest.webmanifest`, `icons/` — PWA 지원 파일. 서비스 워커 파일은 저장소에 없다.
 
 ## 관리자
 
