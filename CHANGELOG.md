@@ -1,5 +1,14 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-25 — libraries.dev 효과 적용 (eunho-fx)
+
+- 무엇: 은호당님 지시("libraries.dev 효과 컴포넌트 중 어울리는 것을 내 AI 페이지 전부에 적용"). libraries.dev 라이브러리(border-beam·thinking-orbs·liquid-gooey·metal-fx·img-fx)는 React 18 전용이라, 같은 효과를 React 없이 쓰는 공용 파일 eunho-fx 1.0(CSS+JS, gzip 약 10KB, thinking-orbs 엔진 MIT 포함)을 붙였다.
+- 이 페이지에 쓴 것: 첫 제목·마지막 닉네임 금빛, '시작하기'·'동의합니다' 단추 둘레 빛, 문항에 답하면 그 카드 밑줄 빛, 결과의 사주 궁합 기둥이 현상되듯 드러나고 빛 한 바퀴, 주 단추 자석. 기존 페이지 넘김 애니메이션은 그대로 둠.
+- 관련 파일: `index.html`, `CHANGELOG.md`
+- 남은 일: 커밋·푸시·`wrangler deploy`는 은호당님 승인 후.
+- 지킨 것: 계산·저장·전송 로직과 글자(문구)는 바꾸지 않았다. `prefers-reduced-motion`이면 움직임이 모두 멈추고, 자석·커서 빛은 마우스가 있는 큰 화면에서만 켜진다. 화면 밖·숨은 탭에서는 멈춘다.
+- 작업자: Grok Bot (백업: `C:\Users\phlog\ai-audit\backups\20261125-2045\`)
+
 ## 2026-11-21 — 저장소 점검
 
 - 무엇: 머지 뒤 저장소를 점검했다. 쓰이지 않는 Pretendard Light를 뺐다. 입력칸이 없는 문항의 잘못된 `for`를 뺐다. 관리자 화면의 포커스 링과 44px 높이를 보강했다. 채점 함수에 최소 테스트를 더했다. README에서 없는 `sw.js` 설명을 고쳤다.
